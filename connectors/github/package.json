@@ -1,0 +1,17 @@
+{
+  "name": "@omni-desk/connector-github",
+  "version": "0.0.0",
+  "private": true,
+  "description": "GitHub REST API コネクタ（メインプロセス専用）",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@omni-desk/connector-core": "workspace:*",
+    "@omni-desk/contracts": "workspace:*"
+  }
+}
