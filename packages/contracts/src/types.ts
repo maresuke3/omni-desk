@@ -135,6 +135,25 @@ export interface ChatworkConnectionInfo {
   organizationName?: string
 }
 
+export interface GitHubConnectionInfo {
+  login: string
+  name: string
+  avatarUrl?: string
+}
+
+export interface AtlassianConnectionInfo {
+  binaryPath: string
+  siteUrl?: string
+  version: string
+}
+
+export interface NotionConnectionInfo {
+  id: string
+  name: string
+  avatarUrl?: string
+  workspaceName?: string
+}
+
 /** 送信者を特定するキー。ID 体系がサービスごとに違うので source とセットで扱う */
 export interface SenderKey {
   source: Source
@@ -151,7 +170,12 @@ export interface BlockedSender extends SenderKey {
 /** レンダラーに渡す設定。トークンは絶対に含めない */
 export interface PublicSettings {
   slack: SlackConnectionInfo | null
+  /** 接続済みの全 Slack ワークスペース（複数ワークスペース対応） */
+  slackWorkspaces: SlackConnectionInfo[]
   chatwork: ChatworkConnectionInfo | null
+  github: GitHubConnectionInfo | null
+  atlassian: AtlassianConnectionInfo | null
+  notion: NotionConnectionInfo | null
   refreshIntervalSec: number
   theme: ThemePreference
   /** 明示的にデモモードを有効にしているか */
@@ -175,13 +199,95 @@ export interface SettingsPatch {
   markReadOnDone?: boolean
 }
 
+export const SLACK_USER_SCOPES = [
+  'channels:history',
+  'channels:read',
+  'groups:history',
+  'groups:read',
+  'im:history',
+  'im:read',
+  'mpim:history',
+  'mpim:read',
+  'users:read',
+  'search:read',
+  'emoji:read',
+  'chat:write'
+] as const
+
 export interface SlackConnectInput {
   token: string
   /** ブラウザセッション（xoxc）の場合のみ必要な `d` Cookie */
   cookie?: string
 }
 
+export interface OAuthConnectInput {
+  clientId: string
+  clientSecret: string
+  redirectUri: string
+  /** 認可後にリダイレクトされた URL 全体、または `code` パラメータの値 */
+  codeOrUrl: string
+  state?: string
+}
+
+export type SlackOAuthInput = OAuthConnectInput
+
+/** Slack OAuth 2.0 認可 URL を組み立てる（User OAuth Token 取得用） */
+export function buildSlackAuthorizeUrl(params: {
+  clientId: string
+  redirectUri: string
+  state: string
+}): string {
+  const url = new URL('https://slack.com/oauth/v2/authorize')
+  url.searchParams.set('client_id', params.clientId.trim())
+  url.searchParams.set('user_scope', SLACK_USER_SCOPES.join(','))
+  url.searchParams.set('redirect_uri', params.redirectUri.trim())
+  url.searchParams.set('state', params.state)
+  return url.toString()
+}
+
+/** GitHub OAuth 2.0 認可 URL を組み立てる */
+export function buildGitHubAuthorizeUrl(params: {
+  clientId: string
+  redirectUri: string
+  state: string
+}): string {
+  const url = new URL('https://github.com/login/oauth/authorize')
+  url.searchParams.set('client_id', params.clientId.trim())
+  url.searchParams.set('scope', 'repo read:user')
+  url.searchParams.set('redirect_uri', params.redirectUri.trim())
+  url.searchParams.set('state', params.state)
+  return url.toString()
+}
+
+/** Notion OAuth 2.0 認可 URL を組み立てる */
+export function buildNotionAuthorizeUrl(params: {
+  clientId: string
+  redirectUri: string
+  state: string
+}): string {
+  const url = new URL('https://api.notion.com/v1/oauth/authorize')
+  url.searchParams.set('client_id', params.clientId.trim())
+  url.searchParams.set('response_type', 'code')
+  url.searchParams.set('owner', 'user')
+  url.searchParams.set('redirect_uri', params.redirectUri.trim())
+  url.searchParams.set('state', params.state)
+  return url.toString()
+}
+
 export interface ChatworkConnectInput {
+  token: string
+}
+
+export interface GitHubConnectInput {
+  token: string
+}
+
+export interface AtlassianConnectInput {
+  binaryPath?: string
+  siteUrl?: string
+}
+
+export interface NotionConnectInput {
   token: string
 }
 
@@ -269,11 +375,32 @@ export interface HistorySnapshot {
   fetchedAt: number | null
 }
 
+export interface KnowledgeBoardSnapshot {
+  loading: boolean
+  error: ApiErrorPayload | null
+  lastSyncedAt: number | null
+  pullRequests: PullRequest[]
+  repos: GitHubRepo[]
+  jiraIssues: JiraIssue[]
+  docs: KnowledgeDoc[]
+}
+
+export const emptyKnowledgeSnapshot = (): KnowledgeBoardSnapshot => ({
+  loading: false,
+  error: null,
+  lastSyncedAt: null,
+  pullRequests: [],
+  repos: [],
+  jiraIssues: [],
+  docs: []
+})
+
 export interface AppSnapshot {
   /** 状態の版。差分イベントの seq がこれ以下なら、すでにスナップショットに含まれている */
   seq: number
   settings: PublicSettings
   services: Record<Source, ServiceSnapshot>
+  knowledge: KnowledgeBoardSnapshot
   histories: Record<string, HistorySnapshot>
   /** 受信箱の対応状況（キーは Message.id。未対応のものは持たない） */
   inboxStates: Record<string, InboxItemState>
@@ -283,6 +410,7 @@ export interface AppSnapshot {
 export type StatePatch =
   | { kind: 'settings'; settings: PublicSettings }
   | { kind: 'service'; source: Source; changes: Partial<ServiceSnapshot> }
+  | { kind: 'knowledge'; changes: Partial<KnowledgeBoardSnapshot> }
   | { kind: 'history'; key: string; history: HistorySnapshot | null }
   | { kind: 'reset'; snapshot: AppSnapshot }
   | { kind: 'inbox-states'; states: Record<string, InboxItemState> }
@@ -338,4 +466,76 @@ export interface SetInboxStatusInput {
   status: InboxStatus
   /** status が snoozed のとき必須 */
   until?: number
+}
+
+// ------------------------------------------------------------------ ナレッジボード / ワーク
+
+export type KnowledgeSource = 'confluence' | 'notion'
+
+/** Confluence / Notion で共有された資料・ナレッジの共通型 */
+export interface KnowledgeDoc {
+  id: string
+  source: KnowledgeSource
+  title: string
+  /** Confluence のスペース名 / Notion の親ページ・DB 名 */
+  spaceOrParent?: string
+  excerpt?: string
+  url: string
+  author?: Person
+  updatedAt: number
+}
+
+export type PullRequestRole = 'author' | 'reviewer'
+
+export interface PullRequest {
+  id: string
+  number: number
+  title: string
+  /** `owner/repo` 形式 */
+  repo: string
+  url: string
+  state: 'open' | 'closed' | 'merged'
+  isDraft: boolean
+  author: Person
+  role: PullRequestRole
+  createdAt: number
+  updatedAt: number
+}
+
+export interface GitHubRepo {
+  id: string
+  fullName: string
+  description?: string
+  url: string
+  isPrivate: boolean
+  updatedAt: number
+}
+
+export type JiraStatusCategory = 'todo' | 'in_progress' | 'done'
+
+export interface JiraIssue {
+  key: string
+  summary: string
+  status: string
+  statusCategory: JiraStatusCategory
+  priority?: string
+  issueType?: string
+  projectKey: string
+  assignee?: Person
+  updatedAt: number
+  url?: string
+}
+
+export interface JiraCreateInput {
+  projectKey: string
+  summary: string
+  description?: string
+  issueType?: string
+}
+
+export interface JiraUpdateInput {
+  summary?: string
+  description?: string
+  status?: string
+  assignee?: string
 }

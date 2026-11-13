@@ -13,6 +13,7 @@ export const FEATURE_IDS = {
   home: 'home',
   inbox: 'inbox',
   tasks: 'tasks',
+  knowledge: 'knowledge',
   conversations: 'conversations',
   settings: 'settings'
 } as const
@@ -24,6 +25,7 @@ export const routes = {
   home: (): Route => ({ feature: FEATURE_IDS.home }),
   inbox: (): Route => ({ feature: FEATURE_IDS.inbox }),
   tasks: (): Route => ({ feature: FEATURE_IDS.tasks }),
+  knowledge: (): Route => ({ feature: FEATURE_IDS.knowledge }),
   settings: (): Route => ({ feature: FEATURE_IDS.settings }),
   conversations: (source: Source, conversationId?: string): Route => ({
     feature: FEATURE_IDS.conversations,

@@ -1,4 +1,5 @@
 export type { SlackProvider } from './provider'
 export { SlackService, verifySlack } from './service'
+export { exchangeSlackOAuthCode } from './oauth'
 export { demoSlack, SLACK_DEMO_USER_ID } from './demo'
 export { SlackSync } from './sync'

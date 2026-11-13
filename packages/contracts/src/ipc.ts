@@ -1,8 +1,15 @@
 import type {
   ApiErrorPayload,
   AppSnapshot,
+  AtlassianConnectInput,
   BlockedSender,
   ChatworkConnectInput,
+  GitHubConnectInput,
+  JiraCreateInput,
+  JiraIssue,
+  JiraUpdateInput,
+  NotionConnectInput,
+  OAuthConnectInput,
   PublicSettings,
   SenderKey,
   SendMessageInput,
@@ -11,6 +18,7 @@ import type {
   SetInboxStatusResult,
   SettingsPatch,
   SlackConnectInput,
+  SlackOAuthInput,
   Source,
   StateEvent
 } from './types'
@@ -28,9 +36,23 @@ export interface ApiContract {
   'settings:get': () => PublicSettings
   'settings:update': (patch: SettingsPatch) => PublicSettings
   'slack:connect': (input: SlackConnectInput) => PublicSettings
-  'slack:disconnect': () => PublicSettings
+  'slack:connect-oauth': (input: SlackOAuthInput) => PublicSettings
+  'slack:disconnect': (teamUrl?: string) => PublicSettings
   'chatwork:connect': (input: ChatworkConnectInput) => PublicSettings
   'chatwork:disconnect': () => PublicSettings
+  'github:connect': (input: GitHubConnectInput) => PublicSettings
+  'github:connect-oauth': (input: OAuthConnectInput) => PublicSettings
+  'github:disconnect': () => PublicSettings
+  'atlassian:connect': (input: AtlassianConnectInput) => PublicSettings
+  'atlassian:disconnect': () => PublicSettings
+  'notion:connect': (input: NotionConnectInput) => PublicSettings
+  'notion:connect-oauth': (input: OAuthConnectInput) => PublicSettings
+  'notion:disconnect': () => PublicSettings
+  /** ナレッジボード（PR・リポジトリ・Jira・Confluence・Notion）を再取得する */
+  'knowledge:refresh': (query?: { jql?: string; docQuery?: string }) => void
+  'jira:create': (input: JiraCreateInput) => JiraIssue
+  'jira:update': (input: { key: string; patch: JiraUpdateInput }) => void
+  'jira:comment': (input: { key: string; body: string }) => void
   /** 受信箱で非表示にする送信者を追加する（登録済みなら何もしない） */
   'blocked-senders:add': (sender: BlockedSender) => PublicSettings
   'blocked-senders:remove': (sender: SenderKey) => PublicSettings
@@ -57,9 +79,22 @@ export const API_CHANNELS = [
   'settings:get',
   'settings:update',
   'slack:connect',
+  'slack:connect-oauth',
   'slack:disconnect',
   'chatwork:connect',
   'chatwork:disconnect',
+  'github:connect',
+  'github:connect-oauth',
+  'github:disconnect',
+  'atlassian:connect',
+  'atlassian:disconnect',
+  'notion:connect',
+  'notion:connect-oauth',
+  'notion:disconnect',
+  'knowledge:refresh',
+  'jira:create',
+  'jira:update',
+  'jira:comment',
   'blocked-senders:add',
   'blocked-senders:remove',
   'state:snapshot',
