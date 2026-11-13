@@ -1,0 +1,26 @@
+{
+  "name": "@omni-desk/feature-settings",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Feature MFE: 設定（サービス接続・表示設定）",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@omni-desk/client": "workspace:*",
+    "@omni-desk/contracts": "workspace:*",
+    "@omni-desk/ui": "workspace:*",
+    "lucide-react": "catalog:"
+  },
+  "peerDependencies": {
+    "react": "catalog:"
+  },
+  "devDependencies": {
+    "@types/react": "catalog:",
+    "react": "catalog:"
+  }
+}

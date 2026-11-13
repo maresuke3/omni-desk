@@ -1,0 +1,17 @@
+{
+  "name": "@omni-desk/contracts",
+  "version": "0.0.0",
+  "private": true,
+  "description": "全レイヤー共通の型・IPC 契約・Feature（MFE）契約。実装を持たない",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./feature": "./src/feature.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/react": "catalog:"
+  }
+}

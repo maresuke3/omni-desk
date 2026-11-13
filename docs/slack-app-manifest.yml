@@ -1,0 +1,31 @@
+# Omni Desk 用の Slack アプリ manifest（ユーザートークン方式）
+# https://api.slack.com/apps → Create New App → From a manifest に貼り付けて作成し、
+# ワークスペースにインストールして「User OAuth Token (xoxp-...)」をアプリの設定画面に登録する。
+# 読み取りのスコープと、返信・投稿用の chat:write。
+display_information:
+  name: Omni Desk
+  description: 自分宛てのメッセージの一覧と返信のための個人用ダッシュボード
+oauth_config:
+  scopes:
+    user:
+      - channels:history
+      - channels:read
+      - groups:history
+      - groups:read
+      - im:history
+      - im:read
+      - mpim:history
+      - mpim:read
+      - users:read
+      - search:read
+      - emoji:read
+      - chat:write # 返信・投稿用（あなたの名前で送信されます）
+      # 受信箱で「対応済みにしたらサービス側も既読にする」を使う場合は、次の権限も追加して再インストールする
+      # - channels:write
+      # - groups:write
+      # - im:write
+      # - mpim:write
+settings:
+  org_deploy_enabled: false
+  socket_mode_enabled: false
+  token_rotation_enabled: false

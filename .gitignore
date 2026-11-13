@@ -1,0 +1,11 @@
+node_modules/
+out/
+dist/
+coverage/
+*.tsbuildinfo
+*.log
+.DS_Store
+
+# 認証情報はアプリ内で OS のキーチェーン経由で暗号化保存する。ファイルには置かない。
+.env
+.env.*

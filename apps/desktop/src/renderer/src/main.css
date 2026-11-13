@@ -1,0 +1,6 @@
+@import 'tailwindcss';
+@import '@omni-desk/ui/theme.css';
+
+/* ワークスペースのパッケージ内のクラス名も Tailwind の走査対象にする */
+@source '../../../../../packages';
+@source '../../../../../features';

@@ -1,0 +1,24 @@
+{
+  "name": "@omni-desk/client",
+  "version": "0.0.0",
+  "private": true,
+  "description": "レンダラーの中央ストア（Zustand）と IPC クライアント。画面はここ経由でだけ状態を読み書きする",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@omni-desk/contracts": "workspace:*",
+    "zustand": "catalog:"
+  },
+  "peerDependencies": {
+    "react": "catalog:"
+  },
+  "devDependencies": {
+    "@types/react": "catalog:",
+    "react": "catalog:"
+  }
+}

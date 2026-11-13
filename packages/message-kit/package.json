@@ -1,0 +1,27 @@
+{
+  "name": "@omni-desk/message-kit",
+  "version": "0.0.0",
+  "private": true,
+  "description": "メッセージ・タスク表示の共有部品（Slack / Chatwork 記法の描画を含む）",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@omni-desk/client": "workspace:*",
+    "@omni-desk/contracts": "workspace:*",
+    "@omni-desk/ui": "workspace:*",
+    "gemoji": "catalog:",
+    "lucide-react": "catalog:"
+  },
+  "peerDependencies": {
+    "react": "catalog:"
+  },
+  "devDependencies": {
+    "@types/react": "catalog:",
+    "react": "catalog:"
+  }
+}

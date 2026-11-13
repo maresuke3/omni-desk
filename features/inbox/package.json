@@ -1,0 +1,27 @@
+{
+  "name": "@omni-desk/feature-inbox",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Feature MFE: 受信箱（自分宛てメッセージの横断一覧）",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@omni-desk/client": "workspace:*",
+    "@omni-desk/contracts": "workspace:*",
+    "@omni-desk/message-kit": "workspace:*",
+    "@omni-desk/ui": "workspace:*",
+    "lucide-react": "catalog:"
+  },
+  "peerDependencies": {
+    "react": "catalog:"
+  },
+  "devDependencies": {
+    "@types/react": "catalog:",
+    "react": "catalog:"
+  }
+}

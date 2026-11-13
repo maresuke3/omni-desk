@@ -1,0 +1,57 @@
+{
+  "name": "@omni-desk/desktop",
+  "productName": "Omni Desk",
+  "version": "0.1.0",
+  "private": true,
+  "description": "シェル: Electron 本体（メイン・preload・レンダラーの外枠）。Feature とコネクタを登録して組み立てる",
+  "main": "./out/main/index.js",
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "start": "electron-vite preview",
+    "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
+    "dist:mac": "electron-vite build && electron-builder --mac"
+  },
+  "devDependencies": {
+    "@omni-desk/client": "workspace:*",
+    "@omni-desk/connector-chatwork": "workspace:*",
+    "@omni-desk/connector-core": "workspace:*",
+    "@omni-desk/connector-slack": "workspace:*",
+    "@omni-desk/contracts": "workspace:*",
+    "@omni-desk/feature-conversations": "workspace:*",
+    "@omni-desk/feature-home": "workspace:*",
+    "@omni-desk/feature-inbox": "workspace:*",
+    "@omni-desk/feature-settings": "workspace:*",
+    "@omni-desk/feature-tasks": "workspace:*",
+    "@omni-desk/message-kit": "workspace:*",
+    "@omni-desk/ui": "workspace:*",
+    "@tailwindcss/vite": "catalog:",
+    "@types/node": "catalog:",
+    "@types/react": "catalog:",
+    "@types/react-dom": "catalog:",
+    "@vitejs/plugin-react": "catalog:",
+    "electron": "catalog:",
+    "electron-builder": "catalog:",
+    "electron-vite": "catalog:",
+    "lucide-react": "catalog:",
+    "react": "catalog:",
+    "react-dom": "catalog:",
+    "tailwindcss": "catalog:",
+    "vite": "catalog:"
+  },
+  "build": {
+    "appId": "local.omni-desk",
+    "productName": "Omni Desk",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "out/**/*",
+      "package.json"
+    ],
+    "mac": {
+      "category": "public.app-category.productivity",
+      "target": "dmg"
+    }
+  }
+}
