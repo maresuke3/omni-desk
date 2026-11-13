@@ -76,7 +76,7 @@ User OAuth Token（`xoxp-…`）を設定画面に登録します。
 #### Slack To-dos について
 
 2026 年 10 月に Slack の「後で（Later）」は「To-dos」に変わりましたが、To-dos を取得する公開 API はありません。
-このアプリは Web クライアントが内部で使う `saved.list`（`todo_state` が `to_do` / `completed` のもの）と
+このアプリは Web クライアントが内部で使う `saved.list`（`todo_state` が `to_do` の未完了のもの）と
 `messages.list` で本文を取得しています。非公開 API なので仕様が変わると取得できなくなることがあり、その場合は
 タスク画面に理由を表示します。
 

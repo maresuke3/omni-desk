@@ -240,6 +240,11 @@ export function classifySavedItem(item: RawSavedItem): SavedItemKind {
   return 'saved'
 }
 
+/** saved.list の結果から未完了の To-do のみを抽出する */
+export function selectOpenTodos(items: RawSavedItem[]): RawSavedItem[] {
+  return items.filter((item) => classifySavedItem(item) === 'todo-open')
+}
+
 /** 送信するテキストの &, <, > をエスケープする（Slack の制御文字として解釈されないように） */
 export function escapeSlackText(text: string): string {
   return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')

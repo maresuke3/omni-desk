@@ -4,7 +4,8 @@ import {
   classifySavedItem,
   decorateMentions,
   extractText,
-  prettifyMpimName
+  prettifyMpimName,
+  selectOpenTodos
 } from './normalize'
 
 describe('slack-normalize', () => {
@@ -17,6 +18,16 @@ describe('slack-normalize', () => {
     expect(classifySavedItem({ item_id: 'C1', item_type: 'message', state: 'completed' })).toBe('todo-done')
     expect(classifySavedItem({ item_id: 'C1', item_type: 'message' })).toBe('saved')
     expect(classifySavedItem({ item_id: 'Sa1', item_type: 'reminder' })).toBe('todo-open')
+  })
+
+  it('未完了の To-do のみを抽出する', () => {
+    const items = [
+      { item_id: 'C1', item_type: 'message', ts: '1', todo_state: 'to_do' },
+      { item_id: 'C2', item_type: 'message', ts: '2', todo_state: 'completed' },
+      { item_id: 'C3', item_type: 'message', ts: '3', todo_state: 'saved' },
+      { item_id: 'Sa1', item_type: 'reminder' }
+    ]
+    expect(selectOpenTodos(items).map((x) => x.item_id)).toEqual(['C1', 'Sa1'])
   })
 
   it('メンションに名前を埋め込む', () => {

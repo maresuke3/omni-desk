@@ -12,7 +12,6 @@ import { AppError, mapWithConcurrency, sleep } from '@omni-desk/connector-core'
 import type { SlackProvider } from './provider'
 import {
   buildPermalink,
-  classifySavedItem,
   collectUserIds,
   conversationKind,
   decorateMentions,
@@ -20,6 +19,7 @@ import {
   isMentionOf,
   isVisibleMessage,
   prettifyMpimName,
+  selectOpenTodos,
   slackTsToMs,
   toFiles,
   threadTsFromPermalink,
@@ -521,33 +521,29 @@ export class SlackService implements SlackProvider {
       throw error
     }
 
-    const todos = items
-      .map((item) => ({ item, kind: classifySavedItem(item) }))
-      .filter((x) => x.kind !== 'saved')
+    const todos = selectOpenTodos(items)
 
     // メッセージ本文をまとめて取得
-    const messageItems = todos.filter((x) => x.item.item_type === 'message' && x.item.ts)
+    const messageItems = todos.filter((item) => item.item_type === 'message' && item.ts)
     const lookup = await this.fetchMessagesByTs(
-      messageItems.map((x) => ({ channel: x.item.item_id, ts: x.item.ts as string }))
+      messageItems.map((item) => ({ channel: item.item_id, ts: item.ts as string }))
     )
-    const channelIds = [...new Set(messageItems.map((x) => x.item.item_id))]
+    const channelIds = [...new Set(messageItems.map((item) => item.item_id))]
     await mapWithConcurrency(channelIds, 4, (id) => this.getConversationMeta(id))
     await this.resolveUsers(this.usersIn([...lookup.values()]))
 
-    const tasks: Task[] = todos.map(({ item, kind }) => {
+    const tasks: Task[] = todos.map((item) => {
       const due = Number(item.date_due ?? 0)
       const created = Number(item.date_created ?? 0)
-      const completed = Number(item.date_completed ?? 0)
       const base: Task = {
         id: `slack:${item.item_type}:${item.item_id}:${item.ts ?? ''}`,
         source: 'slack',
         text: item.text ?? item.description ?? '',
         format: 'slack',
-        status: kind === 'todo-done' ? 'done' : 'open',
+        status: 'open',
         dueAt: due > 0 ? due * 1000 : undefined,
         dueHasTime: true,
-        createdAt: created > 0 ? created * 1000 : undefined,
-        completedAt: completed > 0 ? completed * 1000 : undefined
+        createdAt: created > 0 ? created * 1000 : undefined
       }
       if (item.item_type !== 'message' || !item.ts) {
         return { ...base, text: base.text || 'To-do' }
@@ -567,12 +563,12 @@ export class SlackService implements SlackProvider {
     return { tasks }
   }
 
-  /** saved.list（非公開 API）。filter が通らない場合は無指定で再試行する */
+  /** saved.list（非公開 API）。未完了 To-do のみ取得し、filter が通らない場合は無指定で再試行する */
   private async listSavedItems(): Promise<RawSavedItem[]> {
     try {
       return await this.paginate<RawSavedItem>(
         'saved.list',
-        { count: 100, filter: 'todo_with_completed' },
+        { count: 100, filter: 'todo' },
         'saved_items',
         5
       )
