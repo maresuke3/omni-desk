@@ -1,24 +1,16 @@
 import { useState, type ReactNode } from 'react'
-import { Eye, EyeOff, Inbox, KeyRound, Monitor, Moon, ShieldCheck, Sun, TriangleAlert } from 'lucide-react'
-import type { SlackAuthType, ThemePreference } from '@omni-desk/contracts'
+import { ExternalLink, Eye, EyeOff, FileText, FolderGit2, Inbox, KeyRound, Monitor, Moon, Plus, ShieldCheck, Sun, Ticket, TriangleAlert } from 'lucide-react'
+import {
+  buildGitHubAuthorizeUrl,
+  buildNotionAuthorizeUrl,
+  buildSlackAuthorizeUrl,
+  SLACK_USER_SCOPES,
+  type OAuthConnectInput,
+  type ThemePreference
+} from '@omni-desk/contracts'
 import { Avatar, Button, PageHeader, Segmented, SOURCE_LABEL, SourceMark } from '@omni-desk/ui'
 import { cn } from '@omni-desk/ui'
 import { actions, openExternal, useAsyncAction, useRateStatus, useSettings } from '@omni-desk/client'
-
-const SLACK_USER_SCOPES = [
-  'channels:history',
-  'channels:read',
-  'groups:history',
-  'groups:read',
-  'im:history',
-  'im:read',
-  'mpim:history',
-  'mpim:read',
-  'users:read',
-  'search:read',
-  'emoji:read',
-  'chat:write'
-]
 
 function Card({ title, icon, description, children }: { title: string; icon: ReactNode; description?: ReactNode; children: ReactNode }) {
   return (
@@ -40,13 +32,15 @@ function SecretInput({
   value,
   onChange,
   placeholder,
-  hint
+  hint,
+  secret = true
 }: {
   label: string
   value: string
   onChange: (v: string) => void
   placeholder: string
   hint?: ReactNode
+  secret?: boolean
 }) {
   const [visible, setVisible] = useState(false)
   return (
@@ -55,7 +49,7 @@ function SecretInput({
       <span className="flex h-9 items-center gap-2 rounded-lg border border-line bg-sunken px-3 focus-within:border-accent focus-within:bg-panel">
         <KeyRound className="size-3.5 shrink-0 text-fg-subtle" />
         <input
-          type={visible ? 'text' : 'password'}
+          type={!secret || visible ? 'text' : 'password'}
           value={value}
           onChange={(e) => onChange(e.target.value)}
           placeholder={placeholder}
@@ -63,9 +57,11 @@ function SecretInput({
           spellCheck={false}
           className="selectable w-full bg-transparent font-mono text-[12.5px] outline-none placeholder:font-sans placeholder:text-fg-subtle"
         />
-        <button type="button" onClick={() => setVisible((v) => !v)} className="text-fg-subtle hover:text-fg" title={visible ? '隠す' : '表示'}>
-          {visible ? <EyeOff className="size-3.5" /> : <Eye className="size-3.5" />}
-        </button>
+        {secret && (
+          <button type="button" onClick={() => setVisible((v) => !v)} className="text-fg-subtle hover:text-fg" title={visible ? '隠す' : '表示'}>
+            {visible ? <EyeOff className="size-3.5" /> : <Eye className="size-3.5" />}
+          </button>
+        )}
       </span>
       {hint && <span className="mt-1.5 block text-[11.5px] leading-relaxed text-fg-subtle">{hint}</span>}
     </label>
@@ -114,109 +110,252 @@ function Steps({ children }: { children: ReactNode }) {
   return <ol className="list-decimal space-y-1 pl-5 text-[12.5px] leading-relaxed text-fg-muted marker:text-fg-subtle">{children}</ol>
 }
 
+type SlackMode = 'user' | 'oauth' | 'session'
+
+function OAuthFields({
+  value,
+  onChange,
+  redirectPlaceholder,
+  requireHttps,
+  buildAuthorizeUrl,
+  steps
+}: {
+  value: OAuthConnectInput
+  onChange: (next: OAuthConnectInput) => void
+  redirectPlaceholder: string
+  requireHttps: boolean
+  buildAuthorizeUrl: (params: { clientId: string; redirectUri: string; state: string }) => string
+  steps: ReactNode
+}) {
+  const validRedirect = requireHttps
+    ? /^https:\/\//i.test(value.redirectUri.trim())
+    : /^https?:\/\//i.test(value.redirectUri.trim())
+
+  const openAuthorize = () => {
+    const state = crypto.randomUUID()
+    onChange({ ...value, state })
+    openExternal(buildAuthorizeUrl({ clientId: value.clientId, redirectUri: value.redirectUri, state }))
+  }
+
+  return (
+    <>
+      <Steps>{steps}</Steps>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <SecretInput
+          label="Client ID"
+          value={value.clientId}
+          onChange={(clientId) => onChange({ ...value, clientId })}
+          placeholder="Client ID"
+          secret={false}
+        />
+        <SecretInput
+          label="Client Secret"
+          value={value.clientSecret}
+          onChange={(clientSecret) => onChange({ ...value, clientSecret })}
+          placeholder="Client Secret"
+        />
+      </div>
+      <SecretInput
+        label={requireHttps ? 'Redirect URL（https:// 必須）' : 'Redirect URL'}
+        value={value.redirectUri}
+        onChange={(redirectUri) => onChange({ ...value, redirectUri })}
+        placeholder={redirectPlaceholder}
+        secret={false}
+      />
+      <div>
+        <Button type="button" size="sm" disabled={!value.clientId.trim() || !validRedirect} onClick={openAuthorize}>
+          <ExternalLink className="size-3.5" />
+          ブラウザで認可ページを開く
+        </Button>
+      </div>
+      <SecretInput
+        label="リダイレクト URL または認可コード"
+        value={value.codeOrUrl}
+        onChange={(codeOrUrl) => onChange({ ...value, codeOrUrl })}
+        placeholder={`${redirectPlaceholder}?code=...`}
+        hint="認可後に表示されたアドレスバーの URL 全体をそのまま貼り付けられます（Client ID / Secret は保存されません）。"
+      />
+    </>
+  )
+}
+
+const EMPTY_OAUTH: OAuthConnectInput = { clientId: '', clientSecret: '', redirectUri: '', codeOrUrl: '' }
+
 function SlackSettings() {
   const settings = useSettings()
   // 入力中のトークンは画面ローカルに持ち、ストアやディスクには置かない
   const connect = useAsyncAction(actions.connectSlack)
+  const connectOAuth = useAsyncAction(actions.connectSlackOAuth)
   const disconnect = useAsyncAction(actions.disconnectSlack)
-  const [mode, setMode] = useState<SlackAuthType>('user')
+  const [disconnectingUrl, setDisconnectingUrl] = useState<string | null>(null)
+  const [adding, setAdding] = useState(false)
+  const [mode, setMode] = useState<SlackMode>('user')
   const [token, setToken] = useState('')
   const [cookie, setCookie] = useState('')
+  const [oauth, setOauth] = useState<OAuthConnectInput>(EMPTY_OAUTH)
 
-  const conn = settings.slack
+  const workspaces = settings.slackWorkspaces
+  const showForm = workspaces.length === 0 || adding
+  const activePending = mode === 'oauth' ? connectOAuth.pending : connect.pending
+  const activeError = mode === 'oauth' ? connectOAuth.error : connect.error
+  const canSubmit =
+    mode === 'oauth'
+      ? Boolean(oauth.clientId.trim() && oauth.clientSecret.trim() && oauth.redirectUri.trim() && oauth.codeOrUrl.trim())
+      : Boolean(token.trim() && (mode !== 'session' || cookie.trim()))
+
   return (
     <Card
       title="Slack"
       icon={<SourceMark source="slack" size="md" />}
-      description="自分宛てのメンション・チャンネル・DM・To-dos を表示します"
+      description="複数ワークスペースのメンション・チャンネル・DM・To-dos を集約して表示します"
     >
-      {conn ? (
-        <ConnectedRow
-          name={conn.teamName}
-          detail={`${conn.userName} · ${conn.authType === 'session' ? 'ブラウザセッション（To-dos 対応）' : 'ユーザートークン（To-dos 非対応）'}`}
-          onDisconnect={() => void disconnect.run()}
-          pending={disconnect.pending}
-        />
-      ) : (
-        <form
-          className="space-y-4"
-          onSubmit={(e) => {
-            e.preventDefault()
-            void connect.run({ token, cookie: mode === 'session' ? cookie : undefined }).then((ok) => {
-              if (ok) {
-                setToken('')
-                setCookie('')
-              }
-            })
-          }}
-        >
-          <Segmented
-            value={mode}
-            onChange={setMode}
-            options={[
-              { value: 'user', label: 'ユーザートークン（公式 API）' },
-              { value: 'session', label: 'ブラウザセッション（To-dos 対応）' }
-            ]}
-          />
-
-          {mode === 'user' ? (
-            <>
-              <Steps>
-                <li>
-                  <a className="text-accent-text hover:underline" href="#" onClick={(e) => (e.preventDefault(), openExternal('https://api.slack.com/apps'))}>
-                    api.slack.com/apps
-                  </a>{' '}
-                  で「From a manifest」を選び、リポジトリの <code className="rounded bg-sunken px-1">docs/slack-app-manifest.yml</code> を貼り付けてアプリを作成
-                </li>
-                <li>ワークスペースにインストールし、「User OAuth Token（xoxp-…）」をコピー</li>
-              </Steps>
-              <div className="flex flex-wrap gap-1">
-                {SLACK_USER_SCOPES.map((s) => (
-                  <span key={s} className="rounded bg-sunken px-1.5 py-0.5 font-mono text-[11px] text-fg-muted">
-                    {s}
-                  </span>
-                ))}
+      <div className="space-y-4">
+        {workspaces.length > 0 && (
+          <div className="divide-y divide-line">
+            {workspaces.map((conn) => (
+              <div key={`${conn.teamUrl}:${conn.userId}`} className="py-2.5 first:pt-0 last:pb-0">
+                <ConnectedRow
+                  name={conn.teamName}
+                  detail={`${conn.userName} · ${conn.authType === 'session' ? 'ブラウザセッション（To-dos 対応）' : 'ユーザートークン（To-dos 非対応）'}`}
+                  onDisconnect={() => {
+                    setDisconnectingUrl(conn.teamUrl)
+                    void disconnect.run(conn.teamUrl).finally(() => setDisconnectingUrl(null))
+                  }}
+                  pending={disconnect.pending && disconnectingUrl === conn.teamUrl}
+                />
               </div>
-              <SecretInput label="User OAuth Token" value={token} onChange={setToken} placeholder="xoxp-..." />
-              <p className="text-[11.5px] text-fg-subtle">
-                ※ Slack の To-dos は公開 API が無いため、この方式では表示できません。社内でアプリのインストールに管理者承認が必要な場合があります。
-              </p>
-            </>
-          ) : (
-            <>
-              <div className="flex gap-2.5 rounded-lg border border-warning/30 bg-warning-soft px-3.5 py-3 text-[12.5px] leading-relaxed">
-                <TriangleAlert className="mt-0.5 size-4 shrink-0 text-warning" />
-                <p className="text-fg">
-                  Slack Web クライアントと同じ認証情報（非公式な方法）を使います。To-dos と未読状態が取得できますが、
-                  Slack 側の変更で動かなくなる可能性があります。<b>利用前に社内のセキュリティポリシーを確認してください。</b>
-                  ログアウトすると無効になります。
-                </p>
-              </div>
-              <Steps>
-                <li>ブラウザで Slack ワークスペース（app.slack.com）を開き、開発者ツールを開く</li>
-                <li>
-                  Application → Cookies → <code className="rounded bg-sunken px-1">https://app.slack.com</code> の{' '}
-                  <code className="rounded bg-sunken px-1">d</code> の値（xoxd-…）をコピー
-                </li>
-                <li>
-                  Console で <code className="rounded bg-sunken px-1">Object.values(JSON.parse(localStorage.localConfig_v2).teams).map(t =&gt; [t.name, t.token])</code>{' '}
-                  を実行し、対象ワークスペースの xoxc-… をコピー
-                </li>
-              </Steps>
-              <SecretInput label="セッショントークン" value={token} onChange={setToken} placeholder="xoxc-..." />
-              <SecretInput label="d Cookie" value={cookie} onChange={setCookie} placeholder="xoxd-..." />
-            </>
-          )}
-
-          <div className="flex items-center gap-3">
-            <Button type="submit" variant="primary" loading={connect.pending} disabled={!token.trim() || (mode === 'session' && !cookie.trim())}>
-              接続をテストして保存
-            </Button>
-            <span className="text-[11.5px] text-fg-subtle">トークンは OS のキーチェーンで暗号化して保存されます</span>
+            ))}
           </div>
-          <ErrorText error={connect.error} />
-        </form>
-      )}
+        )}
+
+        {workspaces.length > 0 && !adding && (
+          <div>
+            <Button size="sm" onClick={() => setAdding(true)}>
+              <Plus className="size-3.5" />
+              ワークスペースを追加
+            </Button>
+          </div>
+        )}
+
+        {showForm && (
+          <form
+            className="space-y-4 border-t border-line pt-4 first:border-t-0 first:pt-0"
+            onSubmit={(e) => {
+              e.preventDefault()
+              if (mode === 'oauth') {
+                void connectOAuth.run(oauth).then((ok) => {
+                  if (ok) {
+                    setOauth(EMPTY_OAUTH)
+                    setAdding(false)
+                  }
+                })
+                return
+              }
+              void connect.run({ token, cookie: mode === 'session' ? cookie : undefined }).then((ok) => {
+                if (ok) {
+                  setToken('')
+                  setCookie('')
+                  setAdding(false)
+                }
+              })
+            }}
+          >
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <Segmented
+                value={mode}
+                onChange={setMode}
+                options={[
+                  { value: 'user', label: 'ユーザートークン（xoxp）' },
+                  { value: 'oauth', label: 'OAuth 認可（公式 API）' },
+                  { value: 'session', label: 'ブラウザセッション（To-dos 対応）' }
+                ]}
+              />
+              {workspaces.length > 0 && (
+                <button type="button" onClick={() => setAdding(false)} className="text-[12px] text-fg-subtle hover:text-fg">
+                  キャンセル
+                </button>
+              )}
+            </div>
+
+            {mode === 'user' ? (
+              <>
+                <Steps>
+                  <li>
+                    <a className="text-accent-text hover:underline" href="#" onClick={(e) => (e.preventDefault(), openExternal('https://api.slack.com/apps'))}>
+                      api.slack.com/apps
+                    </a>{' '}
+                    で「From a manifest」を選び、リポジトリの <code className="rounded bg-sunken px-1">docs/slack-app-manifest.yml</code> を貼り付けてアプリを作成
+                  </li>
+                  <li>ワークスペースにインストールし、「User OAuth Token（xoxp-…）」をコピー</li>
+                </Steps>
+                <div className="flex flex-wrap gap-1">
+                  {SLACK_USER_SCOPES.map((s) => (
+                    <span key={s} className="rounded bg-sunken px-1.5 py-0.5 font-mono text-[11px] text-fg-muted">
+                      {s}
+                    </span>
+                  ))}
+                </div>
+                <SecretInput label="User OAuth Token" value={token} onChange={setToken} placeholder="xoxp-..." />
+                <p className="text-[11.5px] text-fg-subtle">
+                  ※ Slack の To-dos は公開 API が無いため、この方式では表示できません。社内でアプリのインストールに管理者承認が必要な場合があります。
+                </p>
+              </>
+            ) : mode === 'oauth' ? (
+              <OAuthFields
+                value={oauth}
+                onChange={setOauth}
+                redirectPlaceholder="https://example.com/slack/callback"
+                requireHttps
+                buildAuthorizeUrl={buildSlackAuthorizeUrl}
+                steps={
+                  <>
+                    <li>
+                      <a className="text-accent-text hover:underline" href="#" onClick={(e) => (e.preventDefault(), openExternal('https://api.slack.com/apps'))}>
+                        api.slack.com/apps
+                      </a>{' '}
+                      でアプリを作成し、「OAuth &amp; Permissions → Redirect URLs」に HTTPS の URL（例: ngrok URL やダミー HTTPS URL）を登録
+                    </li>
+                    <li>Client ID / Client Secret / Redirect URL を入力し、「ブラウザで認可ページを開く」からワークスペースを認可</li>
+                    <li>リダイレクト先の URL 全体（または <code className="rounded bg-sunken px-1">code</code> の値）を下に貼り付けて保存</li>
+                  </>
+                }
+              />
+            ) : (
+              <>
+                <div className="flex gap-2.5 rounded-lg border border-warning/30 bg-warning-soft px-3.5 py-3 text-[12.5px] leading-relaxed">
+                  <TriangleAlert className="mt-0.5 size-4 shrink-0 text-warning" />
+                  <p className="text-fg">
+                    Slack Web クライアントと同じ認証情報（非公式な方法）を使います。To-dos と未読状態が取得できますが、
+                    Slack 側の変更で動かなくなる可能性があります。<b>利用前に社内のセキュリティポリシーを確認してください。</b>
+                    ログアウトすると無効になります。
+                  </p>
+                </div>
+                <Steps>
+                  <li>ブラウザで Slack ワークスペース（app.slack.com）を開き、開発者ツールを開く</li>
+                  <li>
+                    Application → Cookies → <code className="rounded bg-sunken px-1">https://app.slack.com</code> の{' '}
+                    <code className="rounded bg-sunken px-1">d</code> の値（xoxd-…）をコピー
+                  </li>
+                  <li>
+                    Console で <code className="rounded bg-sunken px-1">Object.values(JSON.parse(localStorage.localConfig_v2).teams).map(t =&gt; [t.name, t.token])</code>{' '}
+                    を実行し、対象ワークスペースの xoxc-… をコピー
+                  </li>
+                </Steps>
+                <SecretInput label="セッショントークン" value={token} onChange={setToken} placeholder="xoxc-..." />
+                <SecretInput label="d Cookie" value={cookie} onChange={setCookie} placeholder="xoxd-..." />
+              </>
+            )}
+
+            <div className="flex items-center gap-3">
+              <Button type="submit" variant="primary" loading={activePending} disabled={!canSubmit}>
+                接続をテストして保存
+              </Button>
+              <span className="text-[11.5px] text-fg-subtle">トークンは OS のキーチェーンで暗号化して保存されます</span>
+            </div>
+            <ErrorText error={activeError} />
+          </form>
+        )}
+      </div>
     </Card>
   )
 }
@@ -442,6 +581,239 @@ function BlockedSendersSettings() {
   )
 }
 
+function GitHubSettings() {
+  const settings = useSettings()
+  const connect = useAsyncAction(actions.connectGitHub)
+  const connectOAuth = useAsyncAction(actions.connectGitHubOAuth)
+  const disconnect = useAsyncAction(actions.disconnectGitHub)
+  const [mode, setMode] = useState<'token' | 'oauth'>('token')
+  const [token, setToken] = useState('')
+  const [oauth, setOauth] = useState<OAuthConnectInput>(EMPTY_OAUTH)
+  const conn = settings.github
+
+  const activePending = mode === 'oauth' ? connectOAuth.pending : connect.pending
+  const activeError = mode === 'oauth' ? connectOAuth.error : connect.error
+  const canSubmit =
+    mode === 'oauth'
+      ? Boolean(oauth.clientId.trim() && oauth.clientSecret.trim() && oauth.redirectUri.trim() && oauth.codeOrUrl.trim())
+      : Boolean(token.trim())
+
+  return (
+    <Card
+      title="GitHub"
+      icon={<FolderGit2 className="size-5 text-fg-muted" />}
+      description="自分の PR・レビュー依頼 PR・リポジトリをナレッジボードに表示します"
+    >
+      {conn ? (
+        <ConnectedRow
+          name={conn.name}
+          detail={`@${conn.login}`}
+          avatarUrl={conn.avatarUrl}
+          onDisconnect={() => void disconnect.run()}
+          pending={disconnect.pending}
+        />
+      ) : (
+        <form
+          className="space-y-4"
+          onSubmit={(e) => {
+            e.preventDefault()
+            if (mode === 'oauth') {
+              void connectOAuth.run(oauth).then((ok) => {
+                if (ok) setOauth(EMPTY_OAUTH)
+              })
+              return
+            }
+            void connect.run({ token }).then((ok) => {
+              if (ok) setToken('')
+            })
+          }}
+        >
+          <Segmented
+            value={mode}
+            onChange={setMode}
+            options={[
+              { value: 'token', label: 'Personal Access Token（直打ち）' },
+              { value: 'oauth', label: 'OAuth 認可' }
+            ]}
+          />
+          {mode === 'token' ? (
+            <SecretInput
+              label="Personal Access Token"
+              value={token}
+              onChange={setToken}
+              placeholder="ghp_... / github_pat_..."
+              hint="repo / read:user スコープを持つトークンを入力してください。"
+            />
+          ) : (
+            <OAuthFields
+              value={oauth}
+              onChange={setOauth}
+              redirectPlaceholder="http://localhost:3000/github/callback"
+              requireHttps={false}
+              buildAuthorizeUrl={buildGitHubAuthorizeUrl}
+              steps={
+                <>
+                  <li>GitHub の Developer Settings → OAuth Apps でアプリを作成し、Authorization callback URL を登録</li>
+                  <li>Client ID / Client Secret / Redirect URL を入力し、「ブラウザで認可ページを開く」から認可</li>
+                  <li>リダイレクト先の URL 全体（または <code className="rounded bg-sunken px-1">code</code>）を貼り付けて保存</li>
+                </>
+              }
+            />
+          )}
+          <div className="flex items-center gap-3">
+            <Button type="submit" variant="primary" loading={activePending} disabled={!canSubmit}>
+              接続をテストして保存
+            </Button>
+          </div>
+          <ErrorText error={activeError} />
+        </form>
+      )}
+    </Card>
+  )
+}
+
+function AtlassianSettings() {
+  const settings = useSettings()
+  const connect = useAsyncAction(actions.connectAtlassian)
+  const disconnect = useAsyncAction(actions.disconnectAtlassian)
+  const [binaryPath, setBinaryPath] = useState('acli')
+  const [siteUrl, setSiteUrl] = useState('')
+  const conn = settings.atlassian
+
+  return (
+    <Card
+      title="Atlassian CLI（Jira / Confluence）"
+      icon={<Ticket className="size-5 text-fg-muted" />}
+      description="acli を通じて Jira チケットの検索・作成・編集・コメントや Confluence 資料を取得します"
+    >
+      {conn ? (
+        <ConnectedRow
+          name={conn.siteUrl || 'Atlassian CLI'}
+          detail={`${conn.binaryPath} · ${conn.version}`}
+          onDisconnect={() => void disconnect.run()}
+          pending={disconnect.pending}
+        />
+      ) : (
+        <form
+          className="space-y-4"
+          onSubmit={(e) => {
+            e.preventDefault()
+            void connect.run({ binaryPath, siteUrl: siteUrl.trim() || undefined })
+          }}
+        >
+          <div className="grid gap-3 sm:grid-cols-2">
+            <SecretInput label="acli バイナリパス" value={binaryPath} onChange={setBinaryPath} placeholder="acli" secret={false} />
+            <SecretInput
+              label="Atlassian サイト URL（任意）"
+              value={siteUrl}
+              onChange={setSiteUrl}
+              placeholder="https://your-domain.atlassian.net"
+              secret={false}
+            />
+          </div>
+          <div className="flex items-center gap-3">
+            <Button type="submit" variant="primary" loading={connect.pending} disabled={!binaryPath.trim()}>
+              acli の接続を確認して保存
+            </Button>
+          </div>
+          <ErrorText error={connect.error} />
+        </form>
+      )}
+    </Card>
+  )
+}
+
+function NotionSettings() {
+  const settings = useSettings()
+  const connect = useAsyncAction(actions.connectNotion)
+  const connectOAuth = useAsyncAction(actions.connectNotionOAuth)
+  const disconnect = useAsyncAction(actions.disconnectNotion)
+  const [mode, setMode] = useState<'token' | 'oauth'>('token')
+  const [token, setToken] = useState('')
+  const [oauth, setOauth] = useState<OAuthConnectInput>(EMPTY_OAUTH)
+  const conn = settings.notion
+
+  const activePending = mode === 'oauth' ? connectOAuth.pending : connect.pending
+  const activeError = mode === 'oauth' ? connectOAuth.error : connect.error
+  const canSubmit =
+    mode === 'oauth'
+      ? Boolean(oauth.clientId.trim() && oauth.clientSecret.trim() && oauth.redirectUri.trim() && oauth.codeOrUrl.trim())
+      : Boolean(token.trim())
+
+  return (
+    <Card
+      title="Notion"
+      icon={<FileText className="size-5 text-fg-muted" />}
+      description="ワークスペース内の共有ページ・データベースをナレッジボードに表示します"
+    >
+      {conn ? (
+        <ConnectedRow
+          name={conn.workspaceName || conn.name}
+          detail={conn.name}
+          avatarUrl={conn.avatarUrl}
+          onDisconnect={() => void disconnect.run()}
+          pending={disconnect.pending}
+        />
+      ) : (
+        <form
+          className="space-y-4"
+          onSubmit={(e) => {
+            e.preventDefault()
+            if (mode === 'oauth') {
+              void connectOAuth.run(oauth).then((ok) => {
+                if (ok) setOauth(EMPTY_OAUTH)
+              })
+              return
+            }
+            void connect.run({ token }).then((ok) => {
+              if (ok) setToken('')
+            })
+          }}
+        >
+          <Segmented
+            value={mode}
+            onChange={setMode}
+            options={[
+              { value: 'token', label: 'Integration Secret（直打ち）' },
+              { value: 'oauth', label: 'OAuth 認可（Public Integration）' }
+            ]}
+          />
+          {mode === 'token' ? (
+            <SecretInput
+              label="Internal Integration Secret"
+              value={token}
+              onChange={setToken}
+              placeholder="ntn_... / secret_..."
+              hint="対象ページ / データベースにインテグレーションを「コネクト」しておくと検索できます。"
+            />
+          ) : (
+            <OAuthFields
+              value={oauth}
+              onChange={setOauth}
+              redirectPlaceholder="https://example.com/notion/callback"
+              requireHttps
+              buildAuthorizeUrl={buildNotionAuthorizeUrl}
+              steps={
+                <>
+                  <li>Notion Integrations で Public Integration を作成し、Redirect URI（https://）を登録</li>
+                  <li>OAuth Client ID / Client Secret / Redirect URL を入力し、「ブラウザで認可ページを開く」から対象ページを許可</li>
+                  <li>リダイレクト先の URL 全体（または <code className="rounded bg-sunken px-1">code</code>）を貼り付けて保存</li>
+                </>
+              }
+            />
+          )}
+          <div className="flex items-center gap-3">
+            <Button type="submit" variant="primary" loading={activePending} disabled={!canSubmit}>
+              接続をテストして保存
+            </Button>
+          </div>
+          <ErrorText error={activeError} />
+        </form>
+      )}
+    </Card>
+  )
+}
+
 export function SettingsView() {
   const settings = useSettings()
   return (
@@ -456,6 +828,9 @@ export function SettingsView() {
           )}
           <SlackSettings />
           <ChatworkSettings />
+          <GitHubSettings />
+          <AtlassianSettings />
+          <NotionSettings />
           <InboxSettings />
           <DisplaySettings />
           <BlockedSendersSettings />

@@ -2,8 +2,11 @@ import { app, safeStorage } from 'electron'
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import type {
+  AtlassianConnectionInfo,
   BlockedSender,
   ChatworkConnectionInfo,
+  GitHubConnectionInfo,
+  NotionConnectionInfo,
   PublicSettings,
   SenderKey,
   SettingsPatch,
@@ -29,10 +32,23 @@ interface StoredChatwork extends ChatworkConnectionInfo {
   tokenEnc: string
 }
 
+interface StoredGitHub extends GitHubConnectionInfo {
+  tokenEnc: string
+}
+
+interface StoredNotion extends NotionConnectionInfo {
+  tokenEnc: string
+}
+
 interface StoredSettings {
   version: 1
+  /** 後方互換用（読み込み時に slackWorkspaces へ移行） */
   slack?: StoredSlack
+  slackWorkspaces?: StoredSlack[]
   chatwork?: StoredChatwork
+  github?: StoredGitHub
+  atlassian?: AtlassianConnectionInfo
+  notion?: StoredNotion
   refreshIntervalSec: number
   theme: ThemePreference
   demoMode: boolean
@@ -134,14 +150,27 @@ class SettingsStore {
     return result
   }
 
+  private listStoredSlack(s = this.load()): StoredSlack[] {
+    if (s.slackWorkspaces && s.slackWorkspaces.length > 0) return s.slackWorkspaces
+    return s.slack ? [s.slack] : []
+  }
+
   toPublic(): PublicSettings {
     const s = this.load()
-    const slack = s.slack ? stripSecrets(s.slack) : null
+    const slackWorkspaces = this.listStoredSlack(s).map((w) => stripSecrets(w))
+    const slack = slackWorkspaces[0] ?? null
     const chatwork = s.chatwork ? stripSecrets(s.chatwork) : null
-    const demoActive = s.demoMode || (!slack && !chatwork)
+    const github = s.github ? stripSecrets(s.github) : null
+    const atlassian = s.atlassian ? { ...s.atlassian } : null
+    const notion = s.notion ? stripSecrets(s.notion) : null
+    const demoActive = s.demoMode || (slackWorkspaces.length === 0 && !chatwork)
     return {
       slack,
+      slackWorkspaces,
       chatwork,
+      github,
+      atlassian,
+      notion,
       refreshIntervalSec: s.refreshIntervalSec,
       theme: s.theme,
       demoMode: s.demoMode,
@@ -185,17 +214,27 @@ class SettingsStore {
   }
 
   async setSlack(info: SlackConnectionInfo, token: string, cookie?: string): Promise<void> {
-    const slack: StoredSlack = {
+    const entry: StoredSlack = {
       ...info,
       tokenEnc: await this.encrypt(token),
       cookieEnc: cookie ? await this.encrypt(cookie) : undefined
     }
-    this.save({ ...this.load(), slack })
+    const current = this.load()
+    const list = this.listStoredSlack(current).filter((w) => w.teamUrl !== info.teamUrl)
+    list.push(entry)
+    const { slack: _legacy, ...rest } = current
+    this.save({ ...rest, slackWorkspaces: list })
   }
 
-  clearSlack(): void {
-    const { slack: _removed, ...rest } = this.load()
-    this.save({ ...rest })
+  clearSlack(teamUrl?: string): void {
+    const current = this.load()
+    const { slack: _legacy, ...rest } = current
+    if (!teamUrl) {
+      this.save({ ...rest, slackWorkspaces: [] })
+      return
+    }
+    const list = this.listStoredSlack(current).filter((w) => w.teamUrl !== teamUrl)
+    this.save({ ...rest, slackWorkspaces: list })
   }
 
   async setChatwork(info: ChatworkConnectionInfo, token: string): Promise<void> {
@@ -208,18 +247,59 @@ class SettingsStore {
     this.save({ ...rest })
   }
 
+  async setGitHub(info: GitHubConnectionInfo, token: string): Promise<void> {
+    const tokenEnc = await this.encrypt(token)
+    this.save({ ...this.load(), github: { ...info, tokenEnc } })
+  }
+
+  clearGitHub(): void {
+    const { github: _removed, ...rest } = this.load()
+    this.save({ ...rest })
+  }
+
+  setAtlassian(info: AtlassianConnectionInfo): void {
+    this.save({ ...this.load(), atlassian: info })
+  }
+
+  clearAtlassian(): void {
+    const { atlassian: _removed, ...rest } = this.load()
+    this.save({ ...rest })
+  }
+
+  async setNotion(info: NotionConnectionInfo, token: string): Promise<void> {
+    const tokenEnc = await this.encrypt(token)
+    this.save({ ...this.load(), notion: { ...info, tokenEnc } })
+  }
+
+  clearNotion(): void {
+    const { notion: _removed, ...rest } = this.load()
+    this.save({ ...rest })
+  }
+
+  async slackSecretsList(): Promise<SlackSecrets[]> {
+    const list = this.listStoredSlack()
+    return Promise.all(
+      list.map(async (s) => {
+        const patchSlack = (patch: Partial<StoredSlack>): void => {
+          const current = this.load()
+          const updated = this.listStoredSlack(current).map((w) =>
+            w.teamUrl === s.teamUrl ? { ...w, ...patch } : w
+          )
+          const { slack: _legacy, ...rest } = current
+          this.save({ ...rest, slackWorkspaces: updated })
+        }
+        return {
+          ...stripSecrets(s),
+          token: await this.decrypt(s.tokenEnc, (tokenEnc) => patchSlack({ tokenEnc })),
+          cookie: s.cookieEnc ? await this.decrypt(s.cookieEnc, (cookieEnc) => patchSlack({ cookieEnc })) : undefined
+        }
+      })
+    )
+  }
+
   async slackSecrets(): Promise<SlackSecrets | null> {
-    const s = this.load().slack
-    if (!s) return null
-    const patchSlack = (patch: Partial<StoredSlack>): void => {
-      const current = this.load().slack
-      if (current) this.save({ ...this.load(), slack: { ...current, ...patch } })
-    }
-    return {
-      ...stripSecrets(s),
-      token: await this.decrypt(s.tokenEnc, (tokenEnc) => patchSlack({ tokenEnc })),
-      cookie: s.cookieEnc ? await this.decrypt(s.cookieEnc, (cookieEnc) => patchSlack({ cookieEnc })) : undefined
-    }
+    const list = await this.slackSecretsList()
+    return list[0] ?? null
   }
 
   async chatworkSecrets(): Promise<ChatworkSecrets | null> {
@@ -230,6 +310,28 @@ class SettingsStore {
       if (current) this.save({ ...this.load(), chatwork: { ...current, tokenEnc } })
     })
     return { ...stripSecrets(c), token }
+  }
+
+  async githubToken(): Promise<string | null> {
+    const g = this.load().github
+    if (!g) return null
+    return this.decrypt(g.tokenEnc, (tokenEnc) => {
+      const current = this.load().github
+      if (current) this.save({ ...this.load(), github: { ...current, tokenEnc } })
+    })
+  }
+
+  atlassianConfig(): AtlassianConnectionInfo | null {
+    return this.load().atlassian ? { ...this.load().atlassian! } : null
+  }
+
+  async notionToken(): Promise<string | null> {
+    const n = this.load().notion
+    if (!n) return null
+    return this.decrypt(n.tokenEnc, (tokenEnc) => {
+      const current = this.load().notion
+      if (current) this.save({ ...this.load(), notion: { ...current, tokenEnc } })
+    })
   }
 }
 

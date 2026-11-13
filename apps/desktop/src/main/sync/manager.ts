@@ -6,11 +6,12 @@ import {
   type PersistedChatworkState
 } from '@omni-desk/connector-chatwork'
 import { AppError, chatworkRateGovernor, type SyncEngine } from '@omni-desk/connector-core'
-import { demoSlack, SlackService, SlackSync } from '@omni-desk/connector-slack'
+import { demoSlack, SlackSync } from '@omni-desk/connector-slack'
 import type { InboxItemRef, SendMessageInput, SendMessageResult, Source } from '@omni-desk/contracts'
 import { settings } from '../settings'
 import type { StateHub } from './hub'
 import type { InboxStateService } from './inbox'
+import { MultiSlackSync } from './multi-slack'
 import { encryptedFileStorage, removeStoredState } from './storage'
 
 const chatworkStateName = (accountId: string): string => `chatwork-${accountId}`
@@ -22,7 +23,7 @@ const chatworkStateName = (accountId: string): string => `chatwork-${accountId}`
  */
 export class SyncManager {
   private engines: Partial<Record<Source, SyncEngine>> = {}
-  private slack: SlackSync | null = null
+  private slack: (SyncEngine & { setIntervalMs(ms: number): void }) | null = null
   private key = ''
   private watched: { source: Source; conversationId: string } | null = null
   private queue: Promise<void> = Promise.resolve()
@@ -44,7 +45,8 @@ export class SyncManager {
   private connectionKey(): string {
     const s = settings.toPublic()
     if (s.demoActive) return 'demo'
-    return `slack:${s.slack ? `${s.slack.teamUrl}:${s.slack.userId}:${s.slack.authType}` : '-'}|chatwork:${s.chatwork?.accountId ?? '-'}`
+    const slackKey = s.slackWorkspaces.map((w) => `${w.teamUrl}:${w.userId}:${w.authType}`).join(',') || '-'
+    return `slack:${slackKey}|chatwork:${s.chatwork?.accountId ?? '-'}`
   }
 
   private async reconcile(): Promise<void> {
@@ -67,10 +69,11 @@ export class SyncManager {
         me: { accountId: CHATWORK_DEMO_ACCOUNT_ID, name: 'デモ 太郎' }
       })
     } else {
-      const slackSecrets = s.slack ? await settings.slackSecrets() : null
-      if (slackSecrets) {
-        this.slack = new SlackSync({ provider: new SlackService(slackSecrets), sink: this.hub.sink('slack'), intervalMs })
-        this.engines.slack = this.slack
+      const slackList = await settings.slackSecretsList()
+      if (slackList.length > 0) {
+        const multi = new MultiSlackSync(slackList, this.hub.sink('slack'), intervalMs)
+        this.slack = multi
+        this.engines.slack = multi
       }
       const cw = s.chatwork ? await settings.chatworkSecrets() : null
       if (cw) {

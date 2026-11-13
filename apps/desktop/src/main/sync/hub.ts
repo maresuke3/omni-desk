@@ -1,11 +1,13 @@
 import { BrowserWindow } from 'electron'
 import {
+  emptyKnowledgeSnapshot,
   emptyServiceSnapshot,
   historyKey,
   STATE_PATCH_CHANNEL,
   type AppSnapshot,
   type HistorySnapshot,
   type InboxItemState,
+  type KnowledgeBoardSnapshot,
   type PublicSettings,
   type ServiceSnapshot,
   type Source,
@@ -26,6 +28,7 @@ export class StateHub {
       seq: 0,
       settings,
       services: { slack: emptyServiceSnapshot(), chatwork: emptyServiceSnapshot() },
+      knowledge: emptyKnowledgeSnapshot(),
       histories: {},
       inboxStates: {}
     }
@@ -50,6 +53,11 @@ export class StateHub {
   setSettings(settings: PublicSettings): void {
     this.snapshot = { ...this.snapshot, settings }
     this.broadcast({ kind: 'settings', settings })
+  }
+
+  setKnowledge(changes: Partial<KnowledgeBoardSnapshot>): void {
+    this.snapshot = { ...this.snapshot, knowledge: { ...this.snapshot.knowledge, ...changes } }
+    this.broadcast({ kind: 'knowledge', changes })
   }
 
   /** 接続先が変わったときなど、サービスのデータを空にして送り直す */

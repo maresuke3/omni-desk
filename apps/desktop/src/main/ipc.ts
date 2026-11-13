@@ -1,7 +1,10 @@
 import { ipcMain, nativeTheme, shell, type IpcMainInvokeEvent } from 'electron'
+import { AtlassianCliService } from '@omni-desk/connector-atlassian'
 import { verifyChatwork } from '@omni-desk/connector-chatwork'
 import { AppError, toErrorPayload } from '@omni-desk/connector-core'
-import { verifySlack } from '@omni-desk/connector-slack'
+import { exchangeGitHubOAuthCode, verifyGitHub } from '@omni-desk/connector-github'
+import { exchangeNotionOAuthCode, verifyNotion } from '@omni-desk/connector-notion'
+import { exchangeSlackOAuthCode, verifySlack } from '@omni-desk/connector-slack'
 import type {
   ApiArgs,
   ApiChannel,
@@ -20,6 +23,7 @@ import { assertInboxId } from './inbox-state'
 import { settings } from './settings'
 import type { StateHub } from './sync/hub'
 import type { InboxStateService } from './sync/inbox'
+import type { KnowledgeSyncService } from './sync/knowledge'
 import type { SyncManager } from './sync/manager'
 
 type Handler<C extends ApiChannel> = (...args: ApiArgs<C>) => ApiReturn<C> | Promise<ApiReturn<C>>
@@ -122,18 +126,48 @@ export function applyTheme(s: PublicSettings = settings.toPublic()): void {
   nativeTheme.themeSource = s.theme
 }
 
+function parseOAuthInput(
+  input: { clientId?: unknown; clientSecret?: unknown; redirectUri?: unknown; codeOrUrl?: unknown; state?: unknown } | undefined,
+  requireHttps: boolean
+) {
+  const clientId = requireString(input?.clientId, 'Client ID')
+  const clientSecret = requireString(input?.clientSecret, 'Client Secret')
+  const redirectUri = requireString(input?.redirectUri, 'Redirect URL')
+  const codeOrUrl = requireString(input?.codeOrUrl, '認可コードまたはリダイレクト URL')
+  let parsedRedirect: URL
+  try {
+    parsedRedirect = new URL(redirectUri)
+  } catch {
+    throw new AppError('invalid_input', 'Redirect URL の形式が正しくありません')
+  }
+  if (requireHttps && parsedRedirect.protocol !== 'https:') {
+    throw new AppError('invalid_input', 'Redirect URL には https:// が必要です')
+  }
+  if (!requireHttps && parsedRedirect.protocol !== 'https:' && parsedRedirect.protocol !== 'http:') {
+    throw new AppError('invalid_input', 'Redirect URL は http:// または https:// である必要があります')
+  }
+  return {
+    clientId,
+    clientSecret,
+    redirectUri,
+    codeOrUrl,
+    state: typeof input?.state === 'string' && input.state.trim() ? input.state.trim() : undefined
+  }
+}
+
 export function registerIpc(
   isTrusted: (event: IpcMainInvokeEvent) => boolean,
   hub: StateHub,
   sync: SyncManager,
-  inbox: InboxStateService
+  inbox: InboxStateService,
+  knowledge: KnowledgeSyncService
 ): void {
   const h = <C extends ApiChannel>(channel: C, fn: Handler<C>): void => handle(channel, isTrusted, fn)
 
   /** 設定を保存したら、状態ハブ経由で全画面に反映し、必要なら同期エンジンを作り直す */
   const publish = async (next: PublicSettings): Promise<PublicSettings> => {
     hub.setSettings(next)
-    await sync.apply()
+    await Promise.all([sync.apply(), knowledge.refresh()])
     return next
   }
 
@@ -152,8 +186,15 @@ export function registerIpc(
     await settings.setSlack(info, token, info.authType === 'session' ? cookie : undefined)
     return publish(settings.toPublic())
   })
-  h('slack:disconnect', () => {
-    settings.clearSlack()
+  h('slack:connect-oauth', async (input) => {
+    const parsed = parseOAuthInput(input, true)
+    const token = await exchangeSlackOAuthCode(parsed)
+    const info = await verifySlack(token)
+    await settings.setSlack(info, token)
+    return publish(settings.toPublic())
+  })
+  h('slack:disconnect', (teamUrl) => {
+    settings.clearSlack(typeof teamUrl === 'string' && teamUrl.trim() ? teamUrl.trim() : undefined)
     return publish(settings.toPublic())
   })
   h('chatwork:connect', async (input) => {
@@ -168,13 +209,92 @@ export function registerIpc(
     if (accountId) sync.forgetChatwork(accountId)
     return publish(settings.toPublic())
   })
+  h('github:connect', async (input) => {
+    const token = requireString(input?.token, 'GitHub トークン')
+    const info = await verifyGitHub(token)
+    await settings.setGitHub(info, token)
+    return publish(settings.toPublic())
+  })
+  h('github:connect-oauth', async (input) => {
+    const parsed = parseOAuthInput(input, false)
+    const token = await exchangeGitHubOAuthCode(parsed)
+    const info = await verifyGitHub(token)
+    await settings.setGitHub(info, token)
+    return publish(settings.toPublic())
+  })
+  h('github:disconnect', () => {
+    settings.clearGitHub()
+    return publish(settings.toPublic())
+  })
+  h('atlassian:connect', async (input) => {
+    const binaryPath = input?.binaryPath?.trim() || 'acli'
+    const siteUrl = input?.siteUrl?.trim() || undefined
+    if (siteUrl) {
+      let parsed: URL
+      try {
+        parsed = new URL(siteUrl)
+      } catch {
+        throw new AppError('invalid_input', 'サイト URL の形式が正しくありません')
+      }
+      if (parsed.protocol !== 'https:') {
+        throw new AppError('invalid_input', 'サイト URL には https:// が必要です')
+      }
+    }
+    const { version } = await new AtlassianCliService({ binaryPath, siteUrl }).verify()
+    settings.setAtlassian({ binaryPath, siteUrl, version })
+    return publish(settings.toPublic())
+  })
+  h('atlassian:disconnect', () => {
+    settings.clearAtlassian()
+    return publish(settings.toPublic())
+  })
+  h('notion:connect', async (input) => {
+    const token = requireString(input?.token, 'Notion Integration Token')
+    const info = await verifyNotion(token)
+    await settings.setNotion(info, token)
+    return publish(settings.toPublic())
+  })
+  h('notion:connect-oauth', async (input) => {
+    const parsed = parseOAuthInput(input, true)
+    const token = await exchangeNotionOAuthCode(parsed)
+    const info = await verifyNotion(token)
+    await settings.setNotion(info, token)
+    return publish(settings.toPublic())
+  })
+  h('notion:disconnect', () => {
+    settings.clearNotion()
+    return publish(settings.toPublic())
+  })
+  h('knowledge:refresh', (query) => knowledge.refresh(query))
+  h('jira:create', async (input) => {
+    const projectKey = requireString(input?.projectKey, 'プロジェクトキー')
+    const summary = requireString(input?.summary, '件名')
+    return knowledge.createJiraIssue({
+      projectKey,
+      summary,
+      description: input?.description?.trim() || undefined,
+      issueType: input?.issueType?.trim() || undefined
+    })
+  })
+  h('jira:update', async (input) => {
+    const key = requireString(input?.key, 'チケットキー')
+    await knowledge.updateJiraIssue(key, input?.patch ?? {})
+  })
+  h('jira:comment', async (input) => {
+    const key = requireString(input?.key, 'チケットキー')
+    const body = requireString(input?.body, 'コメント本文')
+    await knowledge.addJiraComment(key, body)
+  })
 
   // 非表示の判定はレンダラー（@omni-desk/client）で行うので、同期エンジンには影響しない
   h('blocked-senders:add', (sender) => publish(settings.blockSender(parseBlockedSender(sender))))
   h('blocked-senders:remove', (sender) => publish(settings.unblockSender(parseSenderKey(sender))))
 
   h('state:snapshot', () => hub.get())
-  h('sync:refresh', () => sync.refresh())
+  h('sync:refresh', () => {
+    sync.refresh()
+    void knowledge.refresh()
+  })
   h('sync:watch', (target) => sync.watch(target === null ? null : parseTarget(target)))
   h('message:send', (input) => sync.send(parseSendInput(input)))
   h('inbox:set-status', async (input) => {

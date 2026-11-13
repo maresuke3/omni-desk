@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { emptyServiceSnapshot, type PublicSettings, type StateEvent } from '@omni-desk/contracts'
+import { emptyKnowledgeSnapshot, emptyServiceSnapshot, type PublicSettings, type StateEvent } from '@omni-desk/contracts'
 import { applyStateEvent } from './store'
 
 const settings = { demoActive: true } as PublicSettings
@@ -7,6 +7,7 @@ const base = () => ({
   seq: 5,
   settings,
   services: { slack: emptyServiceSnapshot(), chatwork: emptyServiceSnapshot() },
+  knowledge: emptyKnowledgeSnapshot(),
   histories: {},
   inboxStates: {}
 })

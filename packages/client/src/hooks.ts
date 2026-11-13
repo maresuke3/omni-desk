@@ -6,6 +6,7 @@ import {
   type ChatworkStatus,
   type Conversation,
   type HistorySnapshot,
+  type KnowledgeBoardSnapshot,
   type Message,
   type PublicSettings,
   type RateStatus,
@@ -75,6 +76,10 @@ export function useSlackEmoji(): SlackEmojiMap | undefined {
 
 export function useRateStatus(source: Source): RateStatus | null {
   return useAppStore((s) => s.services[source].rate ?? null)
+}
+
+export function useKnowledge(): KnowledgeBoardSnapshot {
+  return useAppStore((s) => s.knowledge)
 }
 
 /** 同期中か・最後に同期できた時刻（サイドバーの表示用） */

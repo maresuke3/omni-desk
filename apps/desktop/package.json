@@ -14,13 +14,17 @@
   },
   "devDependencies": {
     "@omni-desk/client": "workspace:*",
+    "@omni-desk/connector-atlassian": "workspace:*",
     "@omni-desk/connector-chatwork": "workspace:*",
     "@omni-desk/connector-core": "workspace:*",
+    "@omni-desk/connector-github": "workspace:*",
+    "@omni-desk/connector-notion": "workspace:*",
     "@omni-desk/connector-slack": "workspace:*",
     "@omni-desk/contracts": "workspace:*",
     "@omni-desk/feature-conversations": "workspace:*",
     "@omni-desk/feature-home": "workspace:*",
     "@omni-desk/feature-inbox": "workspace:*",
+    "@omni-desk/feature-knowledge": "workspace:*",
     "@omni-desk/feature-settings": "workspace:*",
     "@omni-desk/feature-tasks": "workspace:*",
     "@omni-desk/message-kit": "workspace:*",
@@ -42,14 +46,17 @@
   "build": {
     "appId": "local.omni-desk",
     "productName": "Omni Desk",
+    "icon": "build/icon.png",
     "directories": {
       "output": "dist"
     },
     "files": [
       "out/**/*",
+      "build/icon.png",
       "package.json"
     ],
     "mac": {
+      "icon": "build/icon.png",
       "category": "public.app-category.productivity",
       "target": "dmg"
     }

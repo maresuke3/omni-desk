@@ -1,15 +1,23 @@
 import { create } from 'zustand'
 import { createJSONStorage, persist } from 'zustand/middleware'
 import {
+  emptyKnowledgeSnapshot,
   emptyServiceSnapshot,
   routes,
   type AppSnapshot,
+  type AtlassianConnectInput,
   type BlockedSender,
   type ChatworkConnectInput,
+  type GitHubConnectInput,
   type HistorySnapshot,
   type InboxItemState,
   type InboxStatus,
+  type JiraCreateInput,
+  type JiraUpdateInput,
+  type KnowledgeBoardSnapshot,
   type Message,
+  type NotionConnectInput,
+  type OAuthConnectInput,
   type PublicSettings,
   type Route,
   type SenderKey,
@@ -17,6 +25,7 @@ import {
   type ServiceSnapshot,
   type SettingsPatch,
   type SlackConnectInput,
+  type SlackOAuthInput,
   type Source,
   type StateEvent
 } from '@omni-desk/contracts'
@@ -77,6 +86,7 @@ export interface AppState {
   seq: number
   settings: PublicSettings | null
   services: Record<Source, ServiceSnapshot>
+  knowledge: KnowledgeBoardSnapshot
   histories: Record<string, HistorySnapshot>
   ui: UiState
   /** 入力中の本文（キーは入力欄ごと。例: `reply:chatwork:123:456`） */
@@ -93,7 +103,7 @@ export interface AppState {
   inboxUndo: InboxUndo | null
 }
 
-type SyncedState = Pick<AppState, 'seq' | 'settings' | 'services' | 'histories' | 'inboxStates'>
+type SyncedState = Pick<AppState, 'seq' | 'settings' | 'services' | 'knowledge' | 'histories' | 'inboxStates'>
 
 const initialUi: UiState = {
   route: routes.home(),
@@ -114,6 +124,7 @@ export const useAppStore = create<AppState>()(
       seq: 0,
       settings: null,
       services: { slack: emptyServiceSnapshot(), chatwork: emptyServiceSnapshot() },
+      knowledge: emptyKnowledgeSnapshot(),
       histories: {},
       ui: initialUi,
       drafts: {},
@@ -151,6 +162,11 @@ export function applyStateEvent(state: SyncedState, event: StateEvent): Partial<
         seq: event.seq,
         services: { ...state.services, [event.source]: { ...state.services[event.source], ...event.changes } }
       }
+    case 'knowledge':
+      return {
+        seq: event.seq,
+        knowledge: { ...state.knowledge, ...event.changes }
+      }
     case 'history': {
       const histories = { ...state.histories }
       if (event.history) histories[event.key] = event.history
@@ -162,6 +178,7 @@ export function applyStateEvent(state: SyncedState, event: StateEvent): Partial<
         seq: event.seq,
         settings: event.snapshot.settings,
         services: event.snapshot.services,
+        knowledge: event.snapshot.knowledge,
         histories: event.snapshot.histories,
         inboxStates: event.snapshot.inboxStates
       }
@@ -190,6 +207,7 @@ const fromSnapshot = (s: AppSnapshot): SyncedState => ({
   seq: s.seq,
   settings: s.settings,
   services: s.services,
+  knowledge: s.knowledge,
   histories: s.histories,
   inboxStates: s.inboxStates
 })
@@ -247,9 +265,24 @@ export const actions = {
   // ---- 設定・接続
   updateSettings: (patch: SettingsPatch) => withSettings(call('settings:update', patch)),
   connectSlack: (input: SlackConnectInput) => withSettings(call('slack:connect', input)),
-  disconnectSlack: () => withSettings(call('slack:disconnect')),
+  connectSlackOAuth: (input: SlackOAuthInput) => withSettings(call('slack:connect-oauth', input)),
+  disconnectSlack: (teamUrl?: string) => withSettings(call('slack:disconnect', teamUrl)),
   connectChatwork: (input: ChatworkConnectInput) => withSettings(call('chatwork:connect', input)),
   disconnectChatwork: () => withSettings(call('chatwork:disconnect')),
+  connectGitHub: (input: GitHubConnectInput) => withSettings(call('github:connect', input)),
+  connectGitHubOAuth: (input: OAuthConnectInput) => withSettings(call('github:connect-oauth', input)),
+  disconnectGitHub: () => withSettings(call('github:disconnect')),
+  connectAtlassian: (input: AtlassianConnectInput) => withSettings(call('atlassian:connect', input)),
+  disconnectAtlassian: () => withSettings(call('atlassian:disconnect')),
+  connectNotion: (input: NotionConnectInput) => withSettings(call('notion:connect', input)),
+  connectNotionOAuth: (input: OAuthConnectInput) => withSettings(call('notion:connect-oauth', input)),
+  disconnectNotion: () => withSettings(call('notion:disconnect')),
+  refreshKnowledge: (query?: { jql?: string; docQuery?: string }): void => {
+    call('knowledge:refresh', query).catch((error) => console.error(error))
+  },
+  createJiraIssue: (input: JiraCreateInput) => call('jira:create', input),
+  updateJiraIssue: (key: string, patch: JiraUpdateInput) => call('jira:update', { key, patch }),
+  addJiraComment: (key: string, body: string) => call('jira:comment', { key, body }),
   blockSender: (sender: BlockedSender) => withSettings(call('blocked-senders:add', sender)),
   unblockSender: ({ source, senderId }: SenderKey) =>
     withSettings(call('blocked-senders:remove', { source, senderId })),
