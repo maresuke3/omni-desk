@@ -36,7 +36,7 @@ const SHORTCUTS: [string, string][] = [
 
 function ShortcutHelp({ onClose }: { onClose: () => void }) {
   return (
-    <div className="absolute top-full right-0 z-40 mt-2 w-72 rounded-xl border border-line bg-panel p-3 shadow-pop">
+    <div className="absolute top-full right-0 z-50 mt-2 w-72 rounded-xl border border-line bg-panel p-3 shadow-pop">
       <div className="mb-2 flex items-center justify-between">
         <p className="text-[12.5px] font-semibold">キーボード操作</p>
         <IconButton label="閉じる" onClick={onClose} className="size-6">

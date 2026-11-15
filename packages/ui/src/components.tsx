@@ -207,7 +207,7 @@ export function PageHeader({
   children?: ReactNode
 }) {
   return (
-    <header className="drag shrink-0 border-b border-line bg-panel/70 px-7 pt-5 pb-4 backdrop-blur">
+    <header className="drag relative z-20 shrink-0 border-b border-line bg-panel/70 px-7 pt-5 pb-4 backdrop-blur">
       <div className="flex items-end justify-between gap-4">
         <div className="min-w-0">
           <h1 className="text-[19px] font-semibold tracking-tight">{title}</h1>
