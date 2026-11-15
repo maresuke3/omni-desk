@@ -247,6 +247,12 @@ importers:
       '@omni-desk/connector-github':
         specifier: workspace:*
         version: link:../../connectors/github
+      '@omni-desk/connector-gmail':
+        specifier: workspace:*
+        version: link:../../connectors/gmail
+      '@omni-desk/connector-google-calendar':
+        specifier: workspace:*
+        version: link:../../connectors/google-calendar
       '@omni-desk/connector-notion':
         specifier: workspace:*
         version: link:../../connectors/notion
@@ -256,6 +262,9 @@ importers:
       '@omni-desk/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
+      '@omni-desk/feature-calendar':
+        specifier: workspace:*
+        version: link:../../features/calendar
       '@omni-desk/feature-conversations':
         specifier: workspace:*
         version: link:../../features/conversations
@@ -268,6 +277,9 @@ importers:
       '@omni-desk/feature-knowledge':
         specifier: workspace:*
         version: link:../../features/knowledge
+      '@omni-desk/feature-mail':
+        specifier: workspace:*
+        version: link:../../features/mail
       '@omni-desk/feature-settings':
         specifier: workspace:*
         version: link:../../features/settings
@@ -353,6 +365,24 @@ importers:
         specifier: workspace:*
         version: link:../../packages/contracts
 
+  connectors/gmail:
+    dependencies:
+      '@omni-desk/connector-core':
+        specifier: workspace:*
+        version: link:../core
+      '@omni-desk/contracts':
+        specifier: workspace:*
+        version: link:../../packages/contracts
+
+  connectors/google-calendar:
+    dependencies:
+      '@omni-desk/connector-core':
+        specifier: workspace:*
+        version: link:../core
+      '@omni-desk/contracts':
+        specifier: workspace:*
+        version: link:../../packages/contracts
+
   connectors/notion:
     dependencies:
       '@omni-desk/connector-core':
@@ -370,6 +400,28 @@ importers:
       '@omni-desk/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
+
+  features/calendar:
+    dependencies:
+      '@omni-desk/client':
+        specifier: workspace:*
+        version: link:../../packages/client
+      '@omni-desk/contracts':
+        specifier: workspace:*
+        version: link:../../packages/contracts
+      '@omni-desk/ui':
+        specifier: workspace:*
+        version: link:../../packages/ui
+      lucide-react:
+        specifier: 'catalog:'
+        version: 1.72.0(@types/react@19.3.0)(react@19.3.1)
+    devDependencies:
+      '@types/react':
+        specifier: 'catalog:'
+        version: 19.3.0
+      react:
+        specifier: 'catalog:'
+        version: 19.3.1
 
   features/conversations:
     dependencies:
@@ -447,6 +499,31 @@ importers:
         version: 19.3.1
 
   features/knowledge:
+    dependencies:
+      '@omni-desk/client':
+        specifier: workspace:*
+        version: link:../../packages/client
+      '@omni-desk/contracts':
+        specifier: workspace:*
+        version: link:../../packages/contracts
+      '@omni-desk/message-kit':
+        specifier: workspace:*
+        version: link:../../packages/message-kit
+      '@omni-desk/ui':
+        specifier: workspace:*
+        version: link:../../packages/ui
+      lucide-react:
+        specifier: 'catalog:'
+        version: 1.72.0(@types/react@19.3.0)(react@19.3.1)
+    devDependencies:
+      '@types/react':
+        specifier: 'catalog:'
+        version: 19.3.0
+      react:
+        specifier: 'catalog:'
+        version: 19.3.1
+
+  features/mail:
     dependencies:
       '@omni-desk/client':
         specifier: workspace:*

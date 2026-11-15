@@ -76,3 +76,12 @@
 2. **Phase 1 — Google Calendar 連携**: OAuth PKCE 認証と `connectors/google-calendar` + `features/calendar` + ホーム連携
 3. **Phase 2 — Jira 連携（`acli`）**: `connectors/jira` の CLI ラッパー・正規化と `features/jira`（検索・詳細・作成・編集・コメント）
 4. **Phase 3 — AI 連携**: メインプロセスのプロバイダー抽象化・`safeStorage` 認証基盤と、受信箱 / Jira / 予定へのアシスト導線組み込み
+
+---
+
+## 5. ナレッジ作成・蓄積アイデア（メモ）
+
+- **タスク起点のナレッジ作成**:
+  - 新しいナレッジを作成する際、タスク（マイタスク / Jira チケット / GitHub PR 等）を参照元として紐づけ・取り込みできるようにする。
+- **外部サービスへの資料出力**:
+  - 作成したナレッジをアプリ内だけでなく、個人の **Notion** ページや **Google ドライブ / Google ドキュメント** 等にも出力・作成できるようにする。

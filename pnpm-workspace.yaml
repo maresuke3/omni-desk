@@ -6,6 +6,7 @@ packages:
 
 # install スクリプトの実行許可。electron-winstaller は Windows 向けパッケージングでのみ使うので実行しない
 allowBuilds:
+  electron: true
   electron-winstaller: false
 
 # 依存バージョンはここで一元管理し、各 package.json では "catalog:" で参照する

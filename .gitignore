@@ -9,3 +9,5 @@ coverage/
 # 認証情報はアプリ内で OS のキーチェーン経由で暗号化保存する。ファイルには置かない。
 .env
 .env.*
+secret.json
+client_secret*.json
