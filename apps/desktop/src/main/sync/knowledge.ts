@@ -3,11 +3,14 @@ import { AppError, toErrorPayload } from '@omni-desk/connector-core'
 import { GitHubService } from '@omni-desk/connector-github'
 import { NotionService } from '@omni-desk/connector-notion'
 import type {
+  GitHubIssue,
   GitHubRepo,
   JiraCreateInput,
   JiraIssue,
+  JiraProject,
   JiraUpdateInput,
   KnowledgeDoc,
+  NotionPageCreateInput,
   PullRequest
 } from '@omni-desk/contracts'
 import { settings } from '../settings'
@@ -17,7 +20,9 @@ const HOUR = 60 * 60 * 1000
 
 function demoKnowledgeData(): {
   pullRequests: PullRequest[]
+  githubIssues: GitHubIssue[]
   repos: GitHubRepo[]
+  jiraProjects: JiraProject[]
   jiraIssues: JiraIssue[]
   docs: KnowledgeDoc[]
 } {
@@ -51,10 +56,25 @@ function demoKnowledgeData(): {
         updatedAt: now - 2 * HOUR
       }
     ],
+    githubIssues: [
+      {
+        id: 'github:demo:issue-1',
+        number: 42,
+        title: 'Organization 配下リポジトリの同期パフォーマンス改善',
+        repo: 'omni-desk/core-api',
+        url: 'https://github.com/example/core-api/issues/42',
+        state: 'open',
+        author: { id: 'demo-sato', name: 'sato' },
+        labels: ['enhancement', 'org'],
+        updatedAt: now - 3 * HOUR
+      }
+    ],
     repos: [
       {
         id: 'github:demo:repo-1',
         fullName: 'omni-desk/omni-desk',
+        owner: 'omni-desk',
+        language: 'TypeScript',
         description: 'Slack / Chatwork / ナレッジを一元管理するデスクトップダッシュボード',
         url: 'https://github.com/example/omni-desk',
         isPrivate: true,
@@ -63,11 +83,17 @@ function demoKnowledgeData(): {
       {
         id: 'github:demo:repo-2',
         fullName: 'omni-desk/core-api',
+        owner: 'omni-desk',
+        language: 'Go',
         description: '社内共通 API・認証基盤サービス',
         url: 'https://github.com/example/core-api',
         isPrivate: true,
         updatedAt: now - 4 * HOUR
       }
+    ],
+    jiraProjects: [
+      { key: 'OMNI', name: 'OmniDesk' },
+      { key: 'OPS', name: 'Operations' }
     ],
     jiraIssues: [
       {
@@ -132,7 +158,8 @@ export class KnowledgeSyncService {
 
   async refresh(query?: { jql?: string; docQuery?: string }): Promise<void> {
     const pub = settings.toPublic()
-    const hasAny = Boolean(pub.github || pub.atlassian || pub.notion)
+    const hasGitHub = Boolean(pub.github || (pub.githubAccounts?.length ?? 0) > 0)
+    const hasAny = Boolean(hasGitHub || pub.atlassian || pub.notion)
     if (!hasAny || pub.demoMode) {
       this.hub.setKnowledge({
         loading: false,
@@ -145,28 +172,37 @@ export class KnowledgeSyncService {
 
     this.hub.setKnowledge({ loading: true, error: null })
 
-    const [ghToken, notionToken] = await Promise.all([settings.githubToken(), settings.notionToken()])
+    const [ghTokens, notionToken] = await Promise.all([settings.githubTokens(), settings.notionToken()])
     const atlassianCfg = settings.atlassianConfig()
 
     const tasks: Promise<void>[] = []
-    let pullRequests: PullRequest[] = []
-    let repos: GitHubRepo[] = []
+    const prMap = new Map<string, PullRequest>()
+    const issueMap = new Map<string, GitHubIssue>()
+    const repoMap = new Map<string, GitHubRepo>()
     let jiraIssues: JiraIssue[] = []
+    let jiraProjects: JiraProject[] = []
     const docs: KnowledgeDoc[] = []
     let firstError: unknown = null
 
-    if (ghToken) {
-      const gh = new GitHubService(ghToken)
+    for (const token of ghTokens) {
+      const gh = new GitHubService(token)
       tasks.push(
-        Promise.all([gh.listMyPullRequests(), gh.listReviewRequests(), gh.listMyRepos()])
-          .then(([mine, reviews, repoList]) => {
-            const seen = new Set<string>()
-            pullRequests = [...reviews, ...mine].filter((pr) => {
-              if (seen.has(pr.id)) return false
-              seen.add(pr.id)
-              return true
-            })
-            repos = repoList
+        Promise.all([
+          gh.listMyPullRequests(),
+          gh.listReviewRequests(),
+          gh.listAssignedIssues(),
+          gh.listMyRepos()
+        ])
+          .then(([mine, reviews, issues, repoList]) => {
+            for (const pr of [...reviews, ...mine]) {
+              if (!prMap.has(pr.id)) prMap.set(pr.id, pr)
+            }
+            for (const issue of issues) {
+              if (!issueMap.has(issue.id)) issueMap.set(issue.id, issue)
+            }
+            for (const repo of repoList) {
+              if (!repoMap.has(repo.id)) repoMap.set(repo.id, repo)
+            }
           })
           .catch((e) => {
             firstError ??= e
@@ -187,6 +223,16 @@ export class KnowledgeSyncService {
           })
           .catch((e) => {
             firstError ??= e
+          })
+      )
+      tasks.push(
+        acli
+          .listJiraProjects()
+          .then((projects) => {
+            jiraProjects = projects
+          })
+          .catch(() => {
+            // プロジェクト一覧取得に失敗した場合は課題から補完する
           })
       )
       tasks.push(
@@ -216,15 +262,32 @@ export class KnowledgeSyncService {
     }
 
     await Promise.all(tasks)
+    const pullRequests = [...prMap.values()].sort((a, b) => b.updatedAt - a.updatedAt)
+    const githubIssues = [...issueMap.values()].sort((a, b) => b.updatedAt - a.updatedAt)
+    const repos = [...repoMap.values()].sort((a, b) => b.updatedAt - a.updatedAt)
     docs.sort((a, b) => b.updatedAt - a.updatedAt)
+
+    if (jiraProjects.length === 0 && jiraIssues.length > 0) {
+      const seenKeys = new Set<string>()
+      jiraProjects = jiraIssues
+        .map((i) => i.projectKey)
+        .filter((k) => {
+          if (!k || seenKeys.has(k)) return false
+          seenKeys.add(k)
+          return true
+        })
+        .map((key) => ({ key, name: key }))
+    }
 
     this.hub.setKnowledge({
       loading: false,
       error: firstError ? toErrorPayload(firstError) : null,
       lastSyncedAt: Date.now(),
       pullRequests,
+      githubIssues,
       repos,
       jiraIssues,
+      jiraProjects,
       docs
     })
   }
@@ -245,5 +308,15 @@ export class KnowledgeSyncService {
   async addJiraComment(key: string, body: string): Promise<void> {
     const acli = this.atlassianService()
     await acli.addJiraComment(key, body)
+  }
+
+  async createNotionPage(input: NotionPageCreateInput): Promise<KnowledgeDoc> {
+    const token = await settings.notionToken()
+    if (!token) {
+      throw new AppError('not_configured', 'Notion が接続されていません')
+    }
+    const created = await new NotionService(token).createPage(input)
+    await this.refresh()
+    return created
   }
 }

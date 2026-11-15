@@ -1,63 +1,39 @@
 import { useMemo, useState } from 'react'
 import {
   BookOpen,
+  CircleDot,
   ExternalLink,
+  FilePlus2,
   FileText,
   FolderGit2,
   GitPullRequest,
-  MessageSquarePlus,
-  Plus,
   RefreshCw,
-  Search,
-  Ticket
+  Search
 } from 'lucide-react'
-import { actions, openExternal, useAsyncAction, useKnowledge, useSettings } from '@omni-desk/client'
-import { routes, type JiraIssue, type KnowledgeDoc, type PullRequest } from '@omni-desk/contracts'
+import { actions, openExternal, useKnowledge, useSettings } from '@omni-desk/client'
+import { routes, type GitHubRepo, type KnowledgeDoc } from '@omni-desk/contracts'
 import type { FeatureContext } from '@omni-desk/contracts/feature'
 import { formatMessageTime } from '@omni-desk/message-kit'
 import { Button, EmptyState, PageHeader, Segmented, SkeletonList, cn } from '@omni-desk/ui'
+import { CreateKnowledgeModal } from './CreateKnowledgeModal'
 
-type BoardTab = 'all' | 'github' | 'jira' | 'docs'
+type KnowledgeTab = 'all' | 'confluence' | 'notion' | 'repos'
 
-const JIRA_CATEGORY_STYLE: Record<JiraIssue['statusCategory'], string> = {
-  todo: 'bg-sunken text-fg-muted',
-  in_progress: 'bg-accent/15 text-accent-text',
-  done: 'bg-success-soft text-success'
-}
+type SelectedItem =
+  | { kind: 'doc'; doc: KnowledgeDoc }
+  | { kind: 'repo'; repo: GitHubRepo }
 
 export function KnowledgeView({ navigate }: FeatureContext) {
   const settings = useSettings()
   const knowledge = useKnowledge()
-  const [tab, setTab] = useState<BoardTab>('all')
+  const [tab, setTab] = useState<KnowledgeTab>('all')
   const [query, setQuery] = useState('')
-  const [showCreateJira, setShowCreateJira] = useState(false)
+  const [selectedKey, setSelectedKey] = useState<string | null>(null)
+  const [createOpen, setCreateOpen] = useState(false)
+  const [draftSeed, setDraftSeed] = useState<{ title: string; body: string } | null>(null)
 
   const q = query.trim().toLowerCase()
-  const prs = useMemo(
-    () =>
-      knowledge.pullRequests.filter(
-        (pr) => !q || pr.title.toLowerCase().includes(q) || pr.repo.toLowerCase().includes(q)
-      ),
-    [knowledge.pullRequests, q]
-  )
-  const repos = useMemo(
-    () =>
-      knowledge.repos.filter(
-        (r) =>
-          !q ||
-          r.fullName.toLowerCase().includes(q) ||
-          (r.description?.toLowerCase().includes(q) ?? false)
-      ),
-    [knowledge.repos, q]
-  )
-  const jiraIssues = useMemo(
-    () =>
-      knowledge.jiraIssues.filter(
-        (j) => !q || j.key.toLowerCase().includes(q) || j.summary.toLowerCase().includes(q)
-      ),
-    [knowledge.jiraIssues, q]
-  )
-  const docs = useMemo(
+  const allDocs = useMemo(
     () =>
       knowledge.docs.filter(
         (d) =>
@@ -69,419 +45,412 @@ export function KnowledgeView({ navigate }: FeatureContext) {
     [knowledge.docs, q]
   )
 
-  const hasAnyConnection = Boolean(settings.github || settings.atlassian || settings.notion)
-  const totalCount = prs.length + repos.length + jiraIssues.length + docs.length
+  const confluenceDocs = useMemo(() => allDocs.filter((d) => d.source === 'confluence'), [allDocs])
+  const notionDocs = useMemo(() => allDocs.filter((d) => d.source === 'notion'), [allDocs])
+
+  const visibleDocs = useMemo(() => {
+    if (tab === 'confluence') return confluenceDocs
+    if (tab === 'notion') return notionDocs
+    if (tab === 'repos') return []
+    return allDocs
+  }, [tab, allDocs, confluenceDocs, notionDocs])
+
+  const visibleRepos = useMemo(() => {
+    if (tab === 'confluence' || tab === 'notion') return []
+    return knowledge.repos.filter(
+      (r) =>
+        !q ||
+        r.fullName.toLowerCase().includes(q) ||
+        (r.description?.toLowerCase().includes(q) ?? false) ||
+        (r.language?.toLowerCase().includes(q) ?? false)
+    )
+  }, [tab, knowledge.repos, q])
+
+  const selectableItems = useMemo<Array<{ key: string; item: SelectedItem }>>(() => {
+    const out: Array<{ key: string; item: SelectedItem }> = []
+    for (const doc of visibleDocs) out.push({ key: `doc:${doc.id}`, item: { kind: 'doc', doc } })
+    for (const repo of visibleRepos) out.push({ key: `repo:${repo.id}`, item: { kind: 'repo', repo } })
+    return out
+  }, [visibleDocs, visibleRepos])
+
+  const selected = useMemo(
+    () => selectableItems.find((x) => x.key === selectedKey)?.item ?? selectableItems[0]?.item ?? null,
+    [selectableItems, selectedKey]
+  )
+
+  const relatedPrs = useMemo(() => {
+    if (selected?.kind !== 'repo') return []
+    return knowledge.pullRequests.filter((pr) => pr.repo === selected.repo.fullName && pr.state === 'open')
+  }, [selected, knowledge.pullRequests])
+
+  const relatedIssues = useMemo(() => {
+    if (selected?.kind !== 'repo') return []
+    return (knowledge.githubIssues ?? []).filter((i) => i.repo === selected.repo.fullName && i.state === 'open')
+  }, [selected, knowledge.githubIssues])
+
+  const hasAnyConnection = Boolean(
+    settings.github ||
+      (settings.githubAccounts?.length ?? 0) > 0 ||
+      settings.atlassian ||
+      settings.notion
+  )
+  const totalCount = visibleDocs.length + visibleRepos.length
 
   return (
     <div className="flex h-full flex-col">
       <PageHeader
-        title="ナレッジボード"
-        subtitle="PR・リポジトリ・Jira・Confluence・Notion を横断して整理します"
+        title="ナレッジ"
+        subtitle="Confluence・Notion の共有資料とリポジトリ知識を横断確認・蓄積します"
+        actions={
+          <div className="flex items-center gap-2">
+            <Button
+              size="sm"
+              variant="primary"
+              onClick={() => {
+                setDraftSeed(null)
+                setCreateOpen(true)
+              }}
+            >
+              <FilePlus2 className="size-3.5" />
+              ナレッジを作成
+            </Button>
+            <Button
+              size="sm"
+              onClick={() => actions.refreshKnowledge(query.trim() ? { docQuery: query.trim() } : undefined)}
+              disabled={knowledge.loading}
+            >
+              <RefreshCw className={cn('size-3.5', knowledge.loading && 'animate-spin')} />
+              更新
+            </Button>
+          </div>
+        }
       >
         <div className="flex flex-wrap items-center gap-2.5">
-          <Segmented
+          <Segmented<KnowledgeTab>
             value={tab}
             onChange={setTab}
             options={[
-              { value: 'all', label: 'すべて' },
-              { value: 'github', label: 'PR & Repo', count: prs.length + repos.length },
-              { value: 'jira', label: 'Jira', count: jiraIssues.length },
-              { value: 'docs', label: '共有資料', count: docs.length }
+              { value: 'all', label: 'すべて', count: allDocs.length + knowledge.repos.length },
+              { value: 'confluence', label: 'Confluence', count: confluenceDocs.length },
+              { value: 'notion', label: 'Notion', count: notionDocs.length },
+              { value: 'repos', label: 'リポジトリ', count: knowledge.repos.length }
             ]}
           />
-          <div className="flex h-8 items-center gap-1.5 rounded-lg border border-line bg-sunken px-2.5 focus-within:border-accent focus-within:bg-panel">
+          <div className="flex h-8 min-w-[200px] flex-1 items-center gap-1.5 rounded-lg border border-line bg-sunken px-2.5 focus-within:border-accent focus-within:bg-panel">
             <Search className="size-3.5 text-fg-subtle" />
             <input
               type="search"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="キーワードで絞り込み..."
-              className="w-44 bg-transparent text-[12.5px] outline-none placeholder:text-fg-subtle"
+              placeholder="タイトル・スペース・リポジトリ・言語で検索..."
+              className="w-full bg-transparent text-[12.5px] outline-none placeholder:text-fg-subtle"
             />
           </div>
-          {settings.atlassian && (
-            <Button size="sm" onClick={() => setShowCreateJira((v) => !v)}>
-              <Plus className="size-3.5" />
-              Jira 起票
-            </Button>
-          )}
-          <Button
-            size="sm"
-            onClick={() => actions.refreshKnowledge(query.trim() ? { docQuery: query.trim() } : undefined)}
-            disabled={knowledge.loading}
-          >
-            <RefreshCw className={cn('size-3.5', knowledge.loading && 'animate-spin')} />
-            更新
-          </Button>
         </div>
       </PageHeader>
 
-      <div className="thin-scroll flex-1 overflow-y-auto">
-        <div className="mx-auto max-w-[1100px] space-y-5 px-7 py-6">
-          {!hasAnyConnection && (
-            <div className="flex items-center justify-between gap-3 rounded-lg border border-line bg-panel px-4 py-3 text-[12.5px]">
-              <p className="text-fg-muted">
-                GitHub / Atlassian CLI（Jira・Confluence）/ Notion を接続すると実データが表示されます（現在はデモデータを表示中）。
-              </p>
-              <Button size="sm" onClick={() => navigate(routes.settings())}>
-                接続設定へ
-              </Button>
-            </div>
-          )}
-
-          {knowledge.error && (
-            <div className="rounded-lg border border-danger/30 bg-danger-soft px-4 py-3 text-[12.5px] text-danger">
-              一部のデータ取得に失敗しました: {knowledge.error.message}
-            </div>
-          )}
-
-          {showCreateJira && <CreateJiraPanel onClose={() => setShowCreateJira(false)} />}
-
-          {knowledge.loading && totalCount === 0 ? (
-            <div className="card p-4">
-              <SkeletonList rows={6} avatar={false} />
-            </div>
-          ) : totalCount === 0 ? (
-            <EmptyState
-              icon={<BookOpen className="size-5" />}
-              title="表示できる項目がありません"
-              description="検索条件を変えるか、設定画面からサービスを接続してください。"
-            />
-          ) : tab === 'all' ? (
-            <div className="grid gap-5 lg:grid-cols-2">
-              <div className="space-y-5">
-                <PrSection items={prs} />
-                <JiraSection items={jiraIssues} canEdit={Boolean(settings.atlassian)} />
-              </div>
-              <div className="space-y-5">
-                <DocsSection items={docs} />
-                <RepoSection items={repos} />
-              </div>
-            </div>
-          ) : tab === 'github' ? (
-            <div className="space-y-5">
-              <PrSection items={prs} />
-              <RepoSection items={repos} />
-            </div>
-          ) : tab === 'jira' ? (
-            <JiraSection items={jiraIssues} canEdit={Boolean(settings.atlassian)} />
-          ) : (
-            <DocsSection items={docs} />
-          )}
+      {knowledge.error && (
+        <div className="px-7 pt-4">
+          <div className="flex items-center justify-between gap-3 rounded-lg border border-danger/30 bg-danger-soft px-4 py-3 text-[12.5px] text-danger">
+            <span>{knowledge.error.message}</span>
+            <Button size="sm" onClick={() => navigate(routes.settings())}>
+              設定を開く
+            </Button>
+          </div>
         </div>
-      </div>
-    </div>
-  )
-}
-
-function SectionCard({
-  title,
-  icon,
-  count,
-  children
-}: {
-  title: string
-  icon: React.ReactNode
-  count: number
-  children: React.ReactNode
-}) {
-  return (
-    <section className="card overflow-hidden">
-      <div className="flex items-center gap-2 border-b border-line px-4 py-3">
-        <span className="text-fg-muted">{icon}</span>
-        <h2 className="text-[13.5px] font-semibold">{title}</h2>
-        <span className="rounded-full bg-sunken px-2 py-px text-[11px] text-fg-muted tabular-nums">{count}</span>
-      </div>
-      {children}
-    </section>
-  )
-}
-
-function PrSection({ items }: { items: PullRequest[] }) {
-  return (
-    <SectionCard title="Pull Requests" icon={<GitPullRequest className="size-4" />} count={items.length}>
-      {items.length === 0 ? (
-        <p className="px-4 py-5 text-[12.5px] text-fg-subtle">対象の PR はありません</p>
-      ) : (
-        <ul className="divide-y divide-line">
-          {items.map((pr) => (
-            <li key={pr.id}>
-              <button
-                type="button"
-                onClick={() => openExternal(pr.url)}
-                className="flex w-full items-start gap-3 px-4 py-3 text-left transition-colors hover:bg-hover"
-              >
-                <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-center gap-1.5 text-[11.5px]">
-                    <span
-                      className={cn(
-                        'rounded px-1.5 py-px font-medium',
-                        pr.role === 'reviewer' ? 'bg-warning-soft text-warning' : 'bg-accent/15 text-accent-text'
-                      )}
-                    >
-                      {pr.role === 'reviewer' ? 'レビュー依頼' : '自分の PR'}
-                    </span>
-                    {pr.isDraft && <span className="rounded bg-sunken px-1.5 py-px text-fg-muted">Draft</span>}
-                    <span className="font-mono text-fg-subtle">
-                      {pr.repo} #{pr.number}
-                    </span>
-                  </div>
-                  <p className="mt-1 truncate text-[13px] font-medium text-fg">{pr.title}</p>
-                  <p className="mt-0.5 text-[11.5px] text-fg-subtle">
-                    {pr.author.name} · {formatMessageTime(pr.updatedAt)}
-                  </p>
-                </div>
-                <ExternalLink className="mt-1 size-3.5 shrink-0 text-fg-subtle" />
-              </button>
-            </li>
-          ))}
-        </ul>
       )}
-    </SectionCard>
-  )
-}
 
-function RepoSection({ items }: { items: ReturnType<typeof useKnowledge>['repos'] }) {
-  return (
-    <SectionCard title="リポジトリ" icon={<FolderGit2 className="size-4" />} count={items.length}>
-      {items.length === 0 ? (
-        <p className="px-4 py-5 text-[12.5px] text-fg-subtle">対象のリポジトリはありません</p>
+      {!hasAnyConnection && !settings.demoActive ? (
+        <div className="flex-1 p-7">
+          <div className="card flex items-center justify-between gap-4 p-5">
+            <div>
+              <p className="text-[13.5px] font-semibold">Confluence / Notion / GitHub を連携しましょう</p>
+              <p className="mt-0.5 text-[12px] text-fg-muted">
+                設定画面から接続すると、社内ドキュメントや Organization リポジトリをここに集約できます。
+              </p>
+            </div>
+            <Button size="sm" variant="primary" onClick={() => navigate(routes.settings())}>
+              設定へ
+            </Button>
+          </div>
+        </div>
+      ) : knowledge.loading && totalCount === 0 ? (
+        <div className="p-7">
+          <div className="card p-4">
+            <SkeletonList rows={6} avatar={false} />
+          </div>
+        </div>
+      ) : totalCount === 0 ? (
+        <div className="flex-1 p-7">
+          <EmptyState
+            icon={<BookOpen className="size-5" />}
+            title="表示できるナレッジがありません"
+            description={q ? '検索キーワードを変えてみてください' : '右上の「更新」または設定画面からサービスを連携してください'}
+          />
+        </div>
       ) : (
-        <ul className="divide-y divide-line">
-          {items.map((repo) => (
-            <li key={repo.id}>
-              <button
-                type="button"
-                onClick={() => openExternal(repo.url)}
-                className="flex w-full items-start gap-3 px-4 py-3 text-left transition-colors hover:bg-hover"
-              >
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2">
-                    <span className="truncate font-mono text-[12.5px] font-medium text-fg">{repo.fullName}</span>
-                    {repo.isPrivate && (
-                      <span className="rounded bg-sunken px-1.5 py-px text-[10.5px] text-fg-muted">Private</span>
-                    )}
-                  </div>
-                  {repo.description && <p className="mt-0.5 truncate text-[12px] text-fg-muted">{repo.description}</p>}
+        <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[400px_minmax(0,1fr)]">
+          {/* 左ペイン：ドキュメント & リポジトリ一覧 */}
+          <div className="thin-scroll divide-y divide-line overflow-y-auto border-r border-line">
+            {visibleDocs.length > 0 && (
+              <section>
+                <div className="sticky top-0 z-10 flex items-center justify-between border-b border-line bg-sunken/95 px-4 py-2 backdrop-blur">
+                  <span className="flex items-center gap-1.5 text-[11.5px] font-semibold text-fg-muted">
+                    <FileText className="size-3.5" />
+                    ドキュメント
+                  </span>
+                  <span className="text-[11px] text-fg-subtle tabular-nums">{visibleDocs.length}</span>
                 </div>
-                <ExternalLink className="mt-0.5 size-3.5 shrink-0 text-fg-subtle" />
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
-    </SectionCard>
-  )
-}
+                <ul className="divide-y divide-line">
+                  {visibleDocs.map((doc) => {
+                    const key = `doc:${doc.id}`
+                    const active = selected?.kind === 'doc' && selected.doc.id === doc.id
+                    return (
+                      <li key={doc.id}>
+                        <button
+                          type="button"
+                          onClick={() => setSelectedKey(key)}
+                          className={cn(
+                            'flex w-full flex-col gap-1 px-4 py-3 text-left transition-colors hover:bg-hover/50',
+                            active && 'bg-accent/10'
+                          )}
+                        >
+                          <div className="flex items-center gap-2">
+                            <span className="rounded bg-sunken px-1.5 py-px text-[10.5px] font-medium uppercase text-fg-muted">
+                              {doc.source}
+                            </span>
+                            {doc.spaceOrParent && (
+                              <span className="truncate text-[11px] text-fg-subtle">{doc.spaceOrParent}</span>
+                            )}
+                          </div>
+                          <p className="truncate text-[13px] font-medium text-fg">{doc.title}</p>
+                          <p className="text-[11px] text-fg-subtle">
+                            {doc.author ? `${doc.author.name} · ` : ''}
+                            {formatMessageTime(doc.updatedAt)}
+                          </p>
+                        </button>
+                      </li>
+                    )
+                  })}
+                </ul>
+              </section>
+            )}
 
-function JiraSection({ items, canEdit }: { items: JiraIssue[]; canEdit: boolean }) {
-  const [activeKey, setActiveKey] = useState<string | null>(null)
-  const [comment, setComment] = useState('')
-  const [nextStatus, setNextStatus] = useState('')
-  const addComment = useAsyncAction(actions.addJiraComment)
-  const updateIssue = useAsyncAction(actions.updateJiraIssue)
+            {visibleRepos.length > 0 && (
+              <section>
+                <div className="sticky top-0 z-10 flex items-center justify-between border-b border-line bg-sunken/95 px-4 py-2 backdrop-blur">
+                  <span className="flex items-center gap-1.5 text-[11.5px] font-semibold text-fg-muted">
+                    <FolderGit2 className="size-3.5" />
+                    リポジトリ
+                  </span>
+                  <span className="text-[11px] text-fg-subtle tabular-nums">{visibleRepos.length}</span>
+                </div>
+                <ul className="divide-y divide-line">
+                  {visibleRepos.map((repo) => {
+                    const key = `repo:${repo.id}`
+                    const active = selected?.kind === 'repo' && selected.repo.id === repo.id
+                    return (
+                      <li key={repo.id}>
+                        <button
+                          type="button"
+                          onClick={() => setSelectedKey(key)}
+                          className={cn(
+                            'flex w-full flex-col gap-1 px-4 py-3 text-left transition-colors hover:bg-hover/50',
+                            active && 'bg-accent/10'
+                          )}
+                        >
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <span className="truncate font-mono text-[12.5px] font-medium text-fg">{repo.fullName}</span>
+                            <span className="rounded bg-sunken px-1.5 py-px text-[10px] text-fg-subtle">
+                              {repo.isPrivate ? 'Private' : 'Public'}
+                            </span>
+                            {repo.language && (
+                              <span className="rounded bg-sunken px-1.5 py-px text-[10px] text-fg-muted">
+                                {repo.language}
+                              </span>
+                            )}
+                          </div>
+                          {repo.description && <p className="line-clamp-1 text-[11.5px] text-fg-muted">{repo.description}</p>}
+                          <p className="text-[11px] text-fg-subtle">更新: {formatMessageTime(repo.updatedAt)}</p>
+                        </button>
+                      </li>
+                    )
+                  })}
+                </ul>
+              </section>
+            )}
+          </div>
 
-  return (
-    <SectionCard title="Jira チケット" icon={<Ticket className="size-4" />} count={items.length}>
-      {items.length === 0 ? (
-        <p className="px-4 py-5 text-[12.5px] text-fg-subtle">対象のチケットはありません</p>
-      ) : (
-        <ul className="divide-y divide-line">
-          {items.map((issue) => {
-            const expanded = activeKey === issue.key
-            return (
-              <li key={issue.key} className="px-4 py-3">
-                <div className="flex items-start gap-3">
+          {/* 右ペイン：詳細プレビュー＆関連コンテキスト */}
+          <div className="thin-scroll overflow-y-auto p-6">
+            {selected?.kind === 'doc' ? (
+              <div className="mx-auto max-w-2xl space-y-4">
+                <div className="flex flex-wrap items-start justify-between gap-3 border-b border-line pb-4">
                   <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-1.5 text-[11.5px]">
-                      <button
-                        type="button"
-                        onClick={() => openExternal(issue.url)}
-                        className="font-mono font-semibold text-accent-text hover:underline"
-                      >
-                        {issue.key}
-                      </button>
-                      <span className={cn('rounded px-1.5 py-px font-medium', JIRA_CATEGORY_STYLE[issue.statusCategory])}>
-                        {issue.status}
+                    <div className="flex items-center gap-2">
+                      <span className="rounded bg-sunken px-2 py-0.5 text-[11px] font-semibold uppercase text-fg-muted">
+                        {selected.doc.source}
                       </span>
-                      {issue.priority && <span className="text-fg-subtle">{issue.priority}</span>}
+                      {selected.doc.spaceOrParent && (
+                        <span className="text-[12px] text-fg-subtle">{selected.doc.spaceOrParent}</span>
+                      )}
                     </div>
-                    <p className="mt-1 text-[13px] font-medium text-fg">{issue.summary}</p>
-                    <p className="mt-0.5 text-[11.5px] text-fg-subtle">
-                      {issue.assignee ? `担当: ${issue.assignee.name} · ` : ''}
-                      {formatMessageTime(issue.updatedAt)}
+                    <h2 className="mt-2 text-[17px] font-semibold text-fg">{selected.doc.title}</h2>
+                    <p className="mt-1 text-[12px] text-fg-subtle">
+                      {selected.doc.author ? `作成・編集: ${selected.doc.author.name} · ` : ''}
+                      最終更新: {formatMessageTime(selected.doc.updatedAt)}
                     </p>
                   </div>
-                  {canEdit && (
+                  <div className="flex items-center gap-2">
                     <Button
                       size="sm"
                       onClick={() => {
-                        setActiveKey(expanded ? null : issue.key)
-                        setNextStatus('')
-                        setComment('')
+                        setDraftSeed({
+                          title: `${selected.doc.title}（補足メモ）`,
+                          body: `## 参照元\n- [${selected.doc.source}] ${selected.doc.title}${selected.doc.url ? ` - ${selected.doc.url}` : ''}\n\n## 要点\n- `
+                        })
+                        setCreateOpen(true)
                       }}
                     >
-                      <MessageSquarePlus className="size-3.5" />
-                      操作
+                      <FilePlus2 className="size-3.5" />
+                      派生メモを作成
                     </Button>
+                    {selected.doc.url && (
+                      <Button size="sm" variant="primary" onClick={() => openExternal(selected.doc.url)}>
+                        <ExternalLink className="size-3.5" />
+                        ブラウザで開く
+                      </Button>
+                    )}
+                  </div>
+                </div>
+                <div className="rounded-xl border border-line bg-panel p-5">
+                  <p className="text-[11.5px] font-medium text-fg-subtle">概要 / 抜粋</p>
+                  <p className="mt-2 whitespace-pre-wrap text-[13.5px] leading-relaxed text-fg">
+                    {selected.doc.excerpt || '（抜粋テキストはありません。右上の「ブラウザで開く」から本文を確認できます）'}
+                  </p>
+                </div>
+              </div>
+            ) : selected?.kind === 'repo' ? (
+              <div className="mx-auto max-w-2xl space-y-5">
+                <div className="flex flex-wrap items-start justify-between gap-3 border-b border-line pb-4">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="rounded bg-sunken px-2 py-0.5 text-[11px] font-medium text-fg-muted">
+                        {selected.repo.isPrivate ? 'Private' : 'Public'}
+                      </span>
+                      {selected.repo.language && (
+                        <span className="rounded bg-sunken px-2 py-0.5 text-[11px] text-fg-muted">
+                          {selected.repo.language}
+                        </span>
+                      )}
+                      {selected.repo.owner && (
+                        <span className="text-[12px] text-fg-subtle">Owner: {selected.repo.owner}</span>
+                      )}
+                    </div>
+                    <h2 className="mt-2 font-mono text-[17px] font-semibold text-fg">{selected.repo.fullName}</h2>
+                    <p className="mt-1 text-[12px] text-fg-subtle">最終更新: {formatMessageTime(selected.repo.updatedAt)}</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      size="sm"
+                      onClick={() => {
+                        setDraftSeed({
+                          title: `${selected.repo.fullName} ナレッジメモ`,
+                          body: `## リポジトリ\n- ${selected.repo.fullName} (${selected.repo.url})\n${selected.repo.description ? `- ${selected.repo.description}\n` : ''}\n## メモ\n- `
+                        })
+                        setCreateOpen(true)
+                      }}
+                    >
+                      <FilePlus2 className="size-3.5" />
+                      リポジトリメモを作成
+                    </Button>
+                    <Button size="sm" variant="primary" onClick={() => openExternal(selected.repo.url)}>
+                      <ExternalLink className="size-3.5" />
+                      GitHub で開く
+                    </Button>
+                  </div>
+                </div>
+
+                {selected.repo.description && (
+                  <div className="rounded-xl border border-line bg-panel p-4 text-[13px] text-fg">
+                    {selected.repo.description}
+                  </div>
+                )}
+
+                <div className="space-y-3">
+                  <h3 className="flex items-center gap-2 text-[12.5px] font-semibold text-fg">
+                    <GitPullRequest className="size-4 text-accent-text" />
+                    関連するオープン PR（{relatedPrs.length}）
+                  </h3>
+                  {relatedPrs.length === 0 ? (
+                    <p className="text-[12px] text-fg-subtle">このリポジトリに関連するオープン PR はありません</p>
+                  ) : (
+                    <div className="card divide-y divide-line overflow-hidden">
+                      {relatedPrs.map((pr) => (
+                        <button
+                          key={pr.id}
+                          type="button"
+                          onClick={() => openExternal(pr.url)}
+                          className="flex w-full items-center justify-between gap-3 px-4 py-2.5 text-left hover:bg-hover/50"
+                        >
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-[13px] font-medium text-fg">
+                              #{pr.number} {pr.title}
+                            </p>
+                            <p className="text-[11px] text-fg-subtle">
+                              {pr.role === 'reviewer' ? 'レビュー依頼' : '自分の PR'} · {pr.author.name}
+                            </p>
+                          </div>
+                          <ExternalLink className="size-3.5 shrink-0 text-fg-subtle" />
+                        </button>
+                      ))}
+                    </div>
                   )}
                 </div>
 
-                {expanded && canEdit && (
-                  <div className="mt-3 space-y-2.5 rounded-lg border border-line bg-sunken p-3">
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="text"
-                        value={nextStatus}
-                        onChange={(e) => setNextStatus(e.target.value)}
-                        placeholder="ステータス変更（例: In Progress / Done）"
-                        className="h-8 flex-1 rounded-md border border-line bg-panel px-2.5 text-[12px] outline-none focus:border-accent"
-                      />
-                      <Button
-                        size="sm"
-                        loading={updateIssue.pending}
-                        disabled={!nextStatus.trim()}
-                        onClick={() =>
-                          void updateIssue.run(issue.key, { status: nextStatus.trim() }).then((ok) => {
-                            if (ok !== undefined) setNextStatus('')
-                          })
-                        }
-                      >
-                        変更
-                      </Button>
+                <div className="space-y-3">
+                  <h3 className="flex items-center gap-2 text-[12.5px] font-semibold text-fg">
+                    <CircleDot className="size-4 text-success" />
+                    関連するアサイン済み Issue（{relatedIssues.length}）
+                  </h3>
+                  {relatedIssues.length === 0 ? (
+                    <p className="text-[12px] text-fg-subtle">このリポジトリにアサインされたオープン Issue はありません</p>
+                  ) : (
+                    <div className="card divide-y divide-line overflow-hidden">
+                      {relatedIssues.map((issue) => (
+                        <button
+                          key={issue.id}
+                          type="button"
+                          onClick={() => openExternal(issue.url)}
+                          className="flex w-full items-center justify-between gap-3 px-4 py-2.5 text-left hover:bg-hover/50"
+                        >
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-[13px] font-medium text-fg">
+                              #{issue.number} {issue.title}
+                            </p>
+                            <p className="text-[11px] text-fg-subtle">{formatMessageTime(issue.updatedAt)}</p>
+                          </div>
+                          <ExternalLink className="size-3.5 shrink-0 text-fg-subtle" />
+                        </button>
+                      ))}
                     </div>
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="text"
-                        value={comment}
-                        onChange={(e) => setComment(e.target.value)}
-                        placeholder="Jira にコメントを投稿..."
-                        className="h-8 flex-1 rounded-md border border-line bg-panel px-2.5 text-[12px] outline-none focus:border-accent"
-                      />
-                      <Button
-                        size="sm"
-                        variant="primary"
-                        loading={addComment.pending}
-                        disabled={!comment.trim()}
-                        onClick={() =>
-                          void addComment.run(issue.key, comment.trim()).then((ok) => {
-                            if (ok !== undefined) {
-                              setComment('')
-                              setActiveKey(null)
-                            }
-                          })
-                        }
-                      >
-                        コメント
-                      </Button>
-                    </div>
-                    {(updateIssue.error || addComment.error) && (
-                      <p className="text-[11.5px] text-danger">
-                        {(updateIssue.error ?? addComment.error)?.message}
-                      </p>
-                    )}
-                  </div>
-                )}
-              </li>
-            )
-          })}
-        </ul>
-      )}
-    </SectionCard>
-  )
-}
-
-function DocsSection({ items }: { items: KnowledgeDoc[] }) {
-  return (
-    <SectionCard title="共有資料（Confluence & Notion）" icon={<FileText className="size-4" />} count={items.length}>
-      {items.length === 0 ? (
-        <p className="px-4 py-5 text-[12.5px] text-fg-subtle">共有資料はありません</p>
-      ) : (
-        <ul className="divide-y divide-line">
-          {items.map((doc) => (
-            <li key={doc.id}>
-              <button
-                type="button"
-                onClick={() => openExternal(doc.url)}
-                className="flex w-full items-start gap-3 px-4 py-3 text-left transition-colors hover:bg-hover"
-              >
-                <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-center gap-1.5 text-[11.5px]">
-                    <span
-                      className={cn(
-                        'rounded px-1.5 py-px font-medium',
-                        doc.source === 'confluence' ? 'bg-accent/15 text-accent-text' : 'bg-sunken text-fg'
-                      )}
-                    >
-                      {doc.source === 'confluence' ? 'Confluence' : 'Notion'}
-                    </span>
-                    {doc.spaceOrParent && <span className="text-fg-subtle">{doc.spaceOrParent}</span>}
-                  </div>
-                  <p className="mt-1 truncate text-[13px] font-medium text-fg">{doc.title}</p>
-                  {doc.excerpt && <p className="mt-0.5 line-clamp-2 text-[12px] text-fg-muted">{doc.excerpt}</p>}
-                  <p className="mt-0.5 text-[11.5px] text-fg-subtle">{formatMessageTime(doc.updatedAt)}</p>
+                  )}
                 </div>
-                <ExternalLink className="mt-1 size-3.5 shrink-0 text-fg-subtle" />
-              </button>
-            </li>
-          ))}
-        </ul>
+              </div>
+            ) : (
+              <EmptyState icon={<BookOpen className="size-6" />} title="項目を選択してください" />
+            )}
+          </div>
+        </div>
       )}
-    </SectionCard>
-  )
-}
 
-function CreateJiraPanel({ onClose }: { onClose: () => void }) {
-  const [projectKey, setProjectKey] = useState('')
-  const [summary, setSummary] = useState('')
-  const [description, setDescription] = useState('')
-  const create = useAsyncAction(actions.createJiraIssue)
-
-  return (
-    <form
-      className="card space-y-3 p-4"
-      onSubmit={(e) => {
-        e.preventDefault()
-        void create.run({ projectKey, summary, description }).then((res) => {
-          if (res) onClose()
-        })
-      }}
-    >
-      <div className="flex items-center justify-between">
-        <h3 className="text-[13.5px] font-semibold">新しい Jira チケットを作成</h3>
-        <button type="button" onClick={onClose} className="text-[12px] text-fg-subtle hover:text-fg">
-          閉じる
-        </button>
-      </div>
-      <div className="grid gap-3 sm:grid-cols-4">
-        <input
-          type="text"
-          value={projectKey}
-          onChange={(e) => setProjectKey(e.target.value)}
-          placeholder="プロジェクト (例: OMNI)"
-          className="h-9 rounded-lg border border-line bg-sunken px-3 text-[12.5px] outline-none focus:border-accent focus:bg-panel"
+      {createOpen && (
+        <CreateKnowledgeModal
+          initialTitle={draftSeed?.title}
+          initialBody={draftSeed?.body}
+          onClose={() => setCreateOpen(false)}
         />
-        <input
-          type="text"
-          value={summary}
-          onChange={(e) => setSummary(e.target.value)}
-          placeholder="件名"
-          className="h-9 rounded-lg border border-line bg-sunken px-3 text-[12.5px] outline-none focus:border-accent focus:bg-panel sm:col-span-3"
-        />
-      </div>
-      <textarea
-        rows={3}
-        value={description}
-        onChange={(e) => setDescription(e.target.value)}
-        placeholder="詳細説明（任意）"
-        className="w-full rounded-lg border border-line bg-sunken p-3 text-[12.5px] outline-none focus:border-accent focus:bg-panel"
-      />
-      <div className="flex items-center gap-3">
-        <Button type="submit" variant="primary" size="sm" loading={create.pending} disabled={!projectKey.trim() || !summary.trim()}>
-          作成する
-        </Button>
-        {create.error && <span className="text-[12px] text-danger">{create.error.message}</span>}
-      </div>
-    </form>
+      )}
+    </div>
   )
 }

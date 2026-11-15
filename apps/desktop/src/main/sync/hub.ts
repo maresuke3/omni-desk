@@ -1,13 +1,17 @@
 import { BrowserWindow } from 'electron'
 import {
+  emptyCalendarSnapshot,
   emptyKnowledgeSnapshot,
+  emptyMailSnapshot,
   emptyServiceSnapshot,
   historyKey,
   STATE_PATCH_CHANNEL,
   type AppSnapshot,
+  type CalendarSnapshot,
   type HistorySnapshot,
   type InboxItemState,
   type KnowledgeBoardSnapshot,
+  type MailSnapshot,
   type PublicSettings,
   type ServiceSnapshot,
   type Source,
@@ -29,6 +33,8 @@ export class StateHub {
       settings,
       services: { slack: emptyServiceSnapshot(), chatwork: emptyServiceSnapshot() },
       knowledge: emptyKnowledgeSnapshot(),
+      calendar: emptyCalendarSnapshot(),
+      mail: emptyMailSnapshot(),
       histories: {},
       inboxStates: {}
     }
@@ -58,6 +64,17 @@ export class StateHub {
   setKnowledge(changes: Partial<KnowledgeBoardSnapshot>): void {
     this.snapshot = { ...this.snapshot, knowledge: { ...this.snapshot.knowledge, ...changes } }
     this.broadcast({ kind: 'knowledge', changes })
+  }
+
+  setCalendar(changes: Partial<CalendarSnapshot>): void {
+    this.snapshot = { ...this.snapshot, calendar: { ...this.snapshot.calendar, ...changes } }
+    this.broadcast({ kind: 'calendar', changes })
+  }
+
+  setMail(changes: Partial<MailSnapshot>): void {
+    const prev = this.snapshot.mail ?? emptyMailSnapshot()
+    this.snapshot = { ...this.snapshot, mail: { ...prev, ...changes } }
+    this.broadcast({ kind: 'mail', changes })
   }
 
   /** 接続先が変わったときなど、サービスのデータを空にして送り直す */

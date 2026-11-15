@@ -4,8 +4,10 @@ import { join } from 'node:path'
 import { applyTheme, registerIpc } from './ipc'
 import { settings } from './settings'
 import { StateHub } from './sync/hub'
+import { CalendarSyncService } from './sync/calendar'
 import { InboxStateService } from './sync/inbox'
 import { KnowledgeSyncService } from './sync/knowledge'
+import { MailSyncService } from './sync/mail'
 import { SyncManager } from './sync/manager'
 
 const APP_NAME = 'Omni Desk'
@@ -104,9 +106,13 @@ app.whenReady().then(() => {
   const inbox = new InboxStateService(hub)
   const sync = new SyncManager(hub, inbox)
   const knowledge = new KnowledgeSyncService(hub)
-  registerIpc(isTrustedSender, hub, sync, inbox, knowledge)
+  const calendar = new CalendarSyncService(hub)
+  const mail = new MailSyncService(hub)
+  registerIpc(isTrustedSender, hub, sync, inbox, knowledge, calendar, mail)
   void sync.apply()
   void knowledge.refresh()
+  void calendar.refresh()
+  void mail.refresh()
   // スリープから復帰したら、閉じていた間の差分を取り直す
   powerMonitor.on('resume', () => sync.resume())
   app.on('before-quit', () => {

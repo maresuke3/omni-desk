@@ -1,13 +1,15 @@
 import type { ReactNode } from 'react'
-import { AtSign, CalendarClock, ChevronRight, CircleCheckBig, Inbox, ListChecks, Mail, MessagesSquare, Users } from 'lucide-react'
+import { AtSign, CalendarClock, CalendarDays, ChevronRight, CircleCheckBig, Inbox, ListChecks, Mail, MessagesSquare, Users, Video } from 'lucide-react'
 import { routes, type Message } from '@omni-desk/contracts'
 import { ConversationKindIcon } from '@omni-desk/message-kit'
 import type { FeatureContext } from '@omni-desk/contracts/feature'
 import { TaskRow } from '@omni-desk/message-kit'
-import { Avatar, EmptyState, ErrorNotice, PageHeader, SkeletonList, SourceMark } from '@omni-desk/ui'
+import { Avatar, Button, EmptyState, ErrorNotice, PageHeader, SkeletonList, SourceMark } from '@omni-desk/ui'
 import { cn } from '@omni-desk/ui'
 import { previewText } from '@omni-desk/message-kit'
 import {
+  openExternal,
+  useCalendar,
   useChatworkStatus,
   useServiceState,
   useSettings,
@@ -126,8 +128,13 @@ export function HomeView({ navigate }: FeatureContext) {
   const tasks = useUnifiedTasks()
   const cwStatus = useChatworkStatus()
   const slackConvs = useConversations('slack')
+  const calendar = useCalendar()
 
   const now = Date.now()
+  const todayStart = new Date(now)
+  todayStart.setHours(0, 0, 0, 0)
+  const todayEndMs = todayStart.getTime() + 86_400_000
+  const todayEvents = calendar.events.filter((e) => e.endAt > now && e.startAt < todayEndMs).slice(0, 4)
   // ホームに出すのは未対応の自分宛て（受信箱・サイドバーの件数と同じ規則）
   const openItems = inbox.entries.filter((e) => e.status === 'open').map((e) => e.message)
   const openTasks = tasks.items.filter((t) => t.status === 'open')
@@ -197,6 +204,46 @@ export function HomeView({ navigate }: FeatureContext) {
               onClick={() => navigate(routes.tasks())}
             />
           </div>
+
+          {(todayEvents.length > 0 || settings.googleCalendar) && (
+            <section className="card overflow-hidden">
+              <div className="flex items-center justify-between border-b border-line px-4 py-3">
+                <h2 className="flex items-center gap-2 text-[13.5px] font-semibold">
+                  <CalendarDays className="size-4 text-accent-text" />
+                  今日の予定
+                </h2>
+                <button
+                  onClick={() => navigate(routes.calendar())}
+                  className="flex items-center gap-0.5 text-[12px] text-fg-muted hover:text-fg"
+                >
+                  カレンダーを開く
+                  <ChevronRight className="size-3.5" />
+                </button>
+              </div>
+              {todayEvents.length === 0 ? (
+                <p className="px-4 py-4 text-[12.5px] text-fg-muted">今日の残りの予定はありません</p>
+              ) : (
+                <div className="divide-y divide-line">
+                  {todayEvents.map((ev) => (
+                    <div key={ev.id} className="flex items-center gap-3 px-4 py-2.5">
+                      <span className="w-24 shrink-0 font-mono text-[12px] text-fg-muted">
+                        {ev.isAllDay
+                          ? '終日'
+                          : `${new Date(ev.startAt).toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' })} – ${new Date(ev.endAt).toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' })}`}
+                      </span>
+                      <span className="min-w-0 flex-1 truncate text-[13px] font-medium">{ev.title}</span>
+                      {ev.meetUrl && (
+                        <Button size="sm" variant="primary" onClick={() => openExternal(ev.meetUrl!)}>
+                          <Video className="size-3.5" />
+                          参加
+                        </Button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </section>
+          )}
 
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-5">
             <section className="lg:col-span-3">

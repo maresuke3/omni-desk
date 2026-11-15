@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react'
-import { ExternalLink, Eye, EyeOff, FileText, FolderGit2, Inbox, KeyRound, Monitor, Moon, Plus, ShieldCheck, Sun, Ticket, TriangleAlert } from 'lucide-react'
+import { CalendarDays, ExternalLink, Eye, EyeOff, FileText, FolderGit2, Inbox, KeyRound, Monitor, Moon, Plus, ShieldCheck, Sun, Ticket, TriangleAlert } from 'lucide-react'
 import {
   buildGitHubAuthorizeUrl,
   buildNotionAuthorizeUrl,
@@ -194,7 +194,7 @@ function SlackSettings() {
   const [cookie, setCookie] = useState('')
   const [oauth, setOauth] = useState<OAuthConnectInput>(EMPTY_OAUTH)
 
-  const workspaces = settings.slackWorkspaces
+  const workspaces = settings.slackWorkspaces ?? (settings.slack ? [settings.slack] : [])
   const showForm = workspaces.length === 0 || adding
   const activePending = mode === 'oauth' ? connectOAuth.pending : connect.pending
   const activeError = mode === 'oauth' ? connectOAuth.error : connect.error
@@ -442,16 +442,22 @@ function Row({ label, description, children }: { label: string; description?: st
 function Toggle({ checked, onChange, disabled }: { checked: boolean; onChange: (v: boolean) => void; disabled?: boolean }) {
   return (
     <button
+      type="button"
       role="switch"
       aria-checked={checked}
       disabled={disabled}
       onClick={() => onChange(!checked)}
       className={cn(
-        'relative h-5 w-9 shrink-0 rounded-full transition-colors disabled:opacity-50',
+        'relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full transition-colors focus-visible:outline-2 focus-visible:outline-accent disabled:cursor-not-allowed disabled:opacity-50',
         checked ? 'bg-accent' : 'bg-line-strong'
       )}
     >
-      <span className={cn('absolute top-0.5 size-4 rounded-full bg-white shadow transition-transform', checked ? 'translate-x-[18px]' : 'translate-x-0.5')} />
+      <span
+        className={cn(
+          'pointer-events-none absolute top-0.5 left-0.5 size-4 rounded-full bg-white shadow transition-transform',
+          checked ? 'translate-x-4' : 'translate-x-0'
+        )}
+      />
     </button>
   )
 }
@@ -533,7 +539,7 @@ function BlockedSendersSettings() {
   const unblock = useAsyncAction(actions.unblockSender)
   // どの行を解除中か（ボタンの読み込み表示用）
   const [unblocking, setUnblocking] = useState<string | null>(null)
-  const list = settings.blockedSenders
+  const list = settings.blockedSenders ?? []
 
   return (
     <Card
@@ -586,11 +592,15 @@ function GitHubSettings() {
   const connect = useAsyncAction(actions.connectGitHub)
   const connectOAuth = useAsyncAction(actions.connectGitHubOAuth)
   const disconnect = useAsyncAction(actions.disconnectGitHub)
+  const [disconnectingId, setDisconnectingId] = useState<string | null>(null)
+  const [adding, setAdding] = useState(false)
   const [mode, setMode] = useState<'token' | 'oauth'>('token')
   const [token, setToken] = useState('')
+  const [label, setLabel] = useState('')
   const [oauth, setOauth] = useState<OAuthConnectInput>(EMPTY_OAUTH)
-  const conn = settings.github
 
+  const accounts = settings.githubAccounts ?? (settings.github ? [settings.github] : [])
+  const showForm = accounts.length === 0 || adding
   const activePending = mode === 'oauth' ? connectOAuth.pending : connect.pending
   const activeError = mode === 'oauth' ? connectOAuth.error : connect.error
   const canSubmit =
@@ -602,72 +612,118 @@ function GitHubSettings() {
     <Card
       title="GitHub"
       icon={<FolderGit2 className="size-5 text-fg-muted" />}
-      description="自分の PR・レビュー依頼 PR・リポジトリをナレッジボードに表示します"
+      description="個人用・会社用など複数のトークンを登録でき、PR・Issue・Organization リポジトリを集約します"
     >
-      {conn ? (
-        <ConnectedRow
-          name={conn.name}
-          detail={`@${conn.login}`}
-          avatarUrl={conn.avatarUrl}
-          onDisconnect={() => void disconnect.run()}
-          pending={disconnect.pending}
-        />
-      ) : (
-        <form
-          className="space-y-4"
-          onSubmit={(e) => {
-            e.preventDefault()
-            if (mode === 'oauth') {
-              void connectOAuth.run(oauth).then((ok) => {
-                if (ok) setOauth(EMPTY_OAUTH)
-              })
-              return
-            }
-            void connect.run({ token }).then((ok) => {
-              if (ok) setToken('')
-            })
-          }}
-        >
-          <Segmented
-            value={mode}
-            onChange={setMode}
-            options={[
-              { value: 'token', label: 'Personal Access Token（直打ち）' },
-              { value: 'oauth', label: 'OAuth 認可' }
-            ]}
-          />
-          {mode === 'token' ? (
-            <SecretInput
-              label="Personal Access Token"
-              value={token}
-              onChange={setToken}
-              placeholder="ghp_... / github_pat_..."
-              hint="repo / read:user スコープを持つトークンを入力してください。"
-            />
-          ) : (
-            <OAuthFields
-              value={oauth}
-              onChange={setOauth}
-              redirectPlaceholder="http://localhost:3000/github/callback"
-              requireHttps={false}
-              buildAuthorizeUrl={buildGitHubAuthorizeUrl}
-              steps={
-                <>
-                  <li>GitHub の Developer Settings → OAuth Apps でアプリを作成し、Authorization callback URL を登録</li>
-                  <li>Client ID / Client Secret / Redirect URL を入力し、「ブラウザで認可ページを開く」から認可</li>
-                  <li>リダイレクト先の URL 全体（または <code className="rounded bg-sunken px-1">code</code>）を貼り付けて保存</li>
-                </>
-              }
-            />
-          )}
-          <div className="flex items-center gap-3">
-            <Button type="submit" variant="primary" loading={activePending} disabled={!canSubmit}>
-              接続をテストして保存
+      <div className="space-y-4">
+        {accounts.length > 0 && (
+          <div className="divide-y divide-line">
+            {accounts.map((conn, idx) => {
+              const accountId = conn.id ?? conn.login
+              return (
+                <div key={`${accountId}:${idx}`} className="py-2.5 first:pt-0 last:pb-0">
+                  <ConnectedRow
+                    name={conn.label ? `${conn.name}（${conn.label}）` : conn.name}
+                    detail={`@${conn.login}`}
+                    avatarUrl={conn.avatarUrl}
+                    onDisconnect={() => {
+                      setDisconnectingId(accountId)
+                      void disconnect.run(accountId).finally(() => setDisconnectingId(null))
+                    }}
+                    pending={disconnect.pending && disconnectingId === accountId}
+                  />
+                </div>
+              )
+            })}
+          </div>
+        )}
+
+        {accounts.length > 0 && !adding && (
+          <div>
+            <Button size="sm" onClick={() => setAdding(true)}>
+              <Plus className="size-3.5" />
+              トークン / アカウントを追加
             </Button>
           </div>
-          <ErrorText error={activeError} />
-        </form>
-      )}
+        )}
+
+        {showForm && (
+          <form
+            className="space-y-4 border-t border-line pt-4 first:border-t-0 first:pt-0"
+            onSubmit={(e) => {
+              e.preventDefault()
+              if (mode === 'oauth') {
+                void connectOAuth.run(oauth).then((ok) => {
+                  if (ok) {
+                    setOauth(EMPTY_OAUTH)
+                    setAdding(false)
+                  }
+                })
+                return
+              }
+              void connect.run({ token, label: label.trim() || undefined }).then((ok) => {
+                if (ok) {
+                  setToken('')
+                  setLabel('')
+                  setAdding(false)
+                }
+              })
+            }}
+          >
+            <Segmented
+              value={mode}
+              onChange={setMode}
+              options={[
+                { value: 'token', label: 'Personal Access Token（直打ち）' },
+                { value: 'oauth', label: 'OAuth 認可' }
+              ]}
+            />
+            {mode === 'token' ? (
+              <div className="space-y-3">
+                <SecretInput
+                  label="ラベル（任意）"
+                  value={label}
+                  onChange={setLabel}
+                  placeholder="例: 個人用 / 会社用"
+                  secret={false}
+                />
+                <SecretInput
+                  label="Personal Access Token"
+                  value={token}
+                  onChange={setToken}
+                  placeholder="ghp_... / github_pat_..."
+                  hint="repo / read:user スコープを持つトークンを入力してください（Organization 用トークンも追加できます）。"
+                />
+              </div>
+            ) : (
+              <OAuthFields
+                value={oauth}
+                onChange={setOauth}
+                redirectPlaceholder="http://localhost:3000/github/callback"
+                requireHttps={false}
+                buildAuthorizeUrl={buildGitHubAuthorizeUrl}
+                steps={
+                  <>
+                    <li>GitHub の Developer Settings → OAuth Apps でアプリを作成し、Authorization callback URL を登録</li>
+                    <li>Client ID / Client Secret / Redirect URL を入力し、「ブラウザで認可ページを開く」から認可</li>
+                    <li>リダイレクト先の URL 全体（または <code className="rounded bg-sunken px-1">code</code>）を貼り付けて保存</li>
+                  </>
+                }
+              />
+            )}
+            <div className="flex items-center gap-3">
+              <Button type="submit" variant="primary" loading={activePending} disabled={!canSubmit}>
+                接続をテストして保存
+              </Button>
+              {accounts.length > 0 && (
+                <Button type="button" size="sm" onClick={() => setAdding(false)}>
+                  キャンセル
+                </Button>
+              )}
+            </div>
+            <ErrorText error={activeError} />
+          </form>
+        )}
+      </div>
     </Card>
   )
 }
@@ -814,27 +870,257 @@ function NotionSettings() {
   )
 }
 
+function GoogleSettings() {
+  const settings = useSettings()
+  const startOAuth = useAsyncAction(actions.startGoogleOAuth)
+  const disconnect = useAsyncAction(actions.disconnectGoogleAccount)
+  const [disconnectingId, setDisconnectingId] = useState<string | null>(null)
+  const [adding, setAdding] = useState(false)
+  const [showCustom, setShowCustom] = useState(false)
+  const [label, setLabel] = useState('')
+  const [clientId, setClientId] = useState('')
+  const [clientSecret, setClientSecret] = useState('')
+  const accounts =
+    settings.googleAccounts ??
+    (settings.googleCalendar
+      ? [{ id: `google:${settings.googleCalendar.email}`, ...settings.googleCalendar }]
+      : [])
+  const hasDefaults = Boolean(settings.googleOAuthConfigured)
+  const canSubmit = hasDefaults || Boolean(clientId.trim())
+  const showForm = accounts.length === 0 || adding
+
+  return (
+    <Card
+      title="Google 連携"
+      icon={<CalendarDays className="size-5 text-fg-muted" />}
+      description="連携対象: Google Calendar・Gmail（今後 Google サービスを順次追加予定）。複数アカウントをまとめて連携できます"
+    >
+      <div className="space-y-4">
+        {accounts.length > 0 && (
+          <div className="divide-y divide-line">
+            {accounts.map((acc) => (
+              <div key={acc.id} className="py-2.5 first:pt-0 last:pb-0">
+                <ConnectedRow
+                  name={acc.label ? `${acc.name || acc.email}（${acc.label}）` : acc.name || acc.email}
+                  detail={`${acc.email} · Calendar / Gmail`}
+                  avatarUrl={acc.avatarUrl}
+                  onDisconnect={() => {
+                    setDisconnectingId(acc.id)
+                    void disconnect.run(acc.id).finally(() => setDisconnectingId(null))
+                  }}
+                  pending={disconnect.pending && disconnectingId === acc.id}
+                />
+              </div>
+            ))}
+          </div>
+        )}
+
+        {accounts.length > 0 && !adding && (
+          <div>
+            <Button size="sm" onClick={() => setAdding(true)}>
+              <Plus className="size-3.5" />
+              Google アカウントを追加
+            </Button>
+          </div>
+        )}
+
+        {showForm && (
+          <div className="space-y-4 border-t border-line pt-4 first:border-t-0 first:pt-0">
+            <p className="text-[12.5px] leading-relaxed text-fg-muted">
+              ボタンを押すとブラウザで Google の認証画面が開き、許可するだけで Google Calendar と Gmail がまとめて連携されます。
+            </p>
+
+            <SecretInput
+              label="ラベル（任意）"
+              value={label}
+              onChange={setLabel}
+              placeholder="例: 仕事用 / 個人用"
+              secret={false}
+            />
+
+            {!hasDefaults && !showCustom && (
+              <p className="rounded-lg border border-warning/30 bg-warning-soft px-3.5 py-2.5 text-[12px] leading-relaxed text-fg">
+                既定の OAuth クライアントが未設定です。リポジトリ直下の <code className="rounded bg-sunken px-1">.env.local</code> に{' '}
+                <code className="rounded bg-sunken px-1">OMNI_GOOGLE_CLIENT_ID</code> を設定するか、下の「別の OAuth アプリを使う」から入力してください。
+              </p>
+            )}
+
+            {(showCustom || !hasDefaults) && (
+              <div className="space-y-3 rounded-lg border border-line bg-sunken/40 p-3.5">
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <SecretInput
+                    label="Client ID"
+                    value={clientId}
+                    onChange={setClientId}
+                    placeholder="xxxx.apps.googleusercontent.com"
+                    secret={false}
+                  />
+                  <SecretInput
+                    label="Client Secret（任意）"
+                    value={clientSecret}
+                    onChange={setClientSecret}
+                    placeholder="GOCSPX-..."
+                  />
+                </div>
+                <p className="text-[11.5px] text-fg-subtle">
+                  ※ リダイレクト URI の手入力や URL のコピペは不要です（ローカルの一時ポートで自動受信します）。
+                </p>
+              </div>
+            )}
+
+            <div className="flex flex-wrap items-center gap-3">
+              <Button
+                type="button"
+                variant="primary"
+                loading={startOAuth.pending}
+                disabled={!canSubmit}
+                onClick={() =>
+                  void startOAuth
+                    .run({
+                      clientId: clientId.trim() || undefined,
+                      clientSecret: clientSecret.trim() || undefined,
+                      label: label.trim() || undefined
+                    })
+                    .then((ok) => {
+                      if (ok) {
+                        setLabel('')
+                        setClientId('')
+                        setClientSecret('')
+                        setAdding(false)
+                      }
+                    })
+                }
+              >
+                <ExternalLink className="size-3.5" />
+                {startOAuth.pending ? 'ブラウザで認証を待機中…' : 'Google アカウントと連携'}
+              </Button>
+              {accounts.length > 0 && (
+                <Button type="button" size="sm" onClick={() => setAdding(false)}>
+                  キャンセル
+                </Button>
+              )}
+              {hasDefaults && (
+                <button
+                  type="button"
+                  onClick={() => setShowCustom((v) => !v)}
+                  className="text-[12px] text-fg-subtle hover:text-fg"
+                >
+                  {showCustom ? '詳細設定を閉じる' : '別の OAuth アプリを使う'}
+                </button>
+              )}
+            </div>
+            <ErrorText error={startOAuth.error} />
+          </div>
+        )}
+      </div>
+    </Card>
+  )
+}
+
+interface SettingsSectionItem {
+  id: string
+  label: string
+  group: 'integrations' | 'app'
+  status?: string
+  connected?: boolean
+}
+
 export function SettingsView() {
   const settings = useSettings()
+  const [activeId, setActiveId] = useState<string>('slack')
+
+  const slackCount = settings.slackWorkspaces?.length ?? (settings.slack ? 1 : 0)
+  const githubCount = settings.githubAccounts?.length ?? (settings.github ? 1 : 0)
+  const googleCount = settings.googleAccounts?.length ?? (settings.googleCalendar ? 1 : 0)
+
+  const sections: SettingsSectionItem[] = [
+    { id: 'slack', label: 'Slack', group: 'integrations', connected: slackCount > 0, status: slackCount > 0 ? String(slackCount) : undefined },
+    { id: 'chatwork', label: 'Chatwork', group: 'integrations', connected: Boolean(settings.chatwork) },
+    { id: 'github', label: 'GitHub', group: 'integrations', connected: githubCount > 0, status: githubCount > 0 ? String(githubCount) : undefined },
+    { id: 'atlassian', label: 'Atlassian', group: 'integrations', connected: Boolean(settings.atlassian) },
+    { id: 'notion', label: 'Notion', group: 'integrations', connected: Boolean(settings.notion) },
+    { id: 'google', label: 'Google 連携', group: 'integrations', connected: googleCount > 0, status: googleCount > 0 ? String(googleCount) : undefined },
+    { id: 'inbox', label: '受信箱', group: 'app' },
+    { id: 'display', label: '表示と同期', group: 'app' },
+    { id: 'blocked', label: '非表示にする送信者', group: 'app', status: settings.blockedSenders.length > 0 ? String(settings.blockedSenders.length) : undefined }
+  ]
+
+  const scrollTo = (id: string) => {
+    setActiveId(id)
+    document.getElementById(`settings-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
+
   return (
     <div className="flex h-full flex-col">
       <PageHeader title="設定" subtitle="サービスの接続と表示の設定" />
-      <div className="thin-scroll flex-1 overflow-y-auto">
-        <div className="mx-auto max-w-[760px] space-y-5 px-7 py-6">
-          {!settings.encryptionAvailable && (
-            <p className="rounded-lg bg-danger-soft px-3.5 py-3 text-[12.5px] text-danger">
-              OS の暗号化ストレージが利用できないため、トークンを保存できません。
-            </p>
-          )}
-          <SlackSettings />
-          <ChatworkSettings />
-          <GitHubSettings />
-          <AtlassianSettings />
-          <NotionSettings />
-          <InboxSettings />
-          <DisplaySettings />
-          <BlockedSendersSettings />
-          <p className="pb-4 text-center text-[11.5px] text-fg-subtle">Microsoft Teams・メールの連携は今後追加予定です</p>
+      <div className="flex min-h-0 flex-1 flex-col md:flex-row">
+        {/* 目次ナビ（広い画面では左サイド目次、狭い画面では上部バー） */}
+        <nav
+          aria-label="設定の目次"
+          className="thin-scroll shrink-0 border-b border-line bg-panel/40 px-4 py-3 md:w-52 md:overflow-y-auto md:border-r md:border-b-0 md:px-3 md:py-5"
+        >
+          <div className="flex gap-1.5 overflow-x-auto md:flex-col md:gap-4">
+            {(['integrations', 'app'] as const).map((group) => (
+              <div key={group} className="flex shrink-0 items-center gap-1 md:flex-col md:items-stretch">
+                <p className="hidden px-2.5 pb-1 text-[10.5px] font-semibold tracking-wider text-fg-subtle uppercase md:block">
+                  {group === 'integrations' ? 'サービス連携' : 'アプリ設定'}
+                </p>
+                {sections
+                  .filter((s) => s.group === group)
+                  .map((item) => {
+                    const active = activeId === item.id
+                    return (
+                      <button
+                        key={item.id}
+                        type="button"
+                        onClick={() => scrollTo(item.id)}
+                        className={cn(
+                          'flex items-center justify-between gap-2 rounded-lg px-2.5 py-1.5 text-left text-[12.5px] whitespace-nowrap transition-colors',
+                          active ? 'bg-accent/12 font-medium text-accent-text' : 'text-fg-muted hover:bg-hover hover:text-fg'
+                        )}
+                      >
+                        <span className="flex min-w-0 items-center gap-2">
+                          {item.group === 'integrations' && (
+                            <span
+                              className={cn(
+                                'size-1.5 shrink-0 rounded-full',
+                                item.connected ? 'bg-success' : 'bg-line-strong'
+                              )}
+                            />
+                          )}
+                          <span className="truncate">{item.label}</span>
+                        </span>
+                        {item.status && (
+                          <span className="rounded bg-sunken px-1.5 py-px text-[10.5px] text-fg-subtle tabular-nums">
+                            {item.status}
+                          </span>
+                        )}
+                      </button>
+                    )
+                  })}
+              </div>
+            ))}
+          </div>
+        </nav>
+
+        <div className="thin-scroll flex-1 overflow-y-auto">
+          <div className="mx-auto max-w-[760px] space-y-5 px-7 py-6">
+            {!settings.encryptionAvailable && (
+              <p className="rounded-lg bg-danger-soft px-3.5 py-3 text-[12.5px] text-danger">
+                OS の暗号化ストレージが利用できないため、トークンを保存できません。
+              </p>
+            )}
+            <div id="settings-slack" className="scroll-mt-6"><SlackSettings /></div>
+            <div id="settings-chatwork" className="scroll-mt-6"><ChatworkSettings /></div>
+            <div id="settings-github" className="scroll-mt-6"><GitHubSettings /></div>
+            <div id="settings-atlassian" className="scroll-mt-6"><AtlassianSettings /></div>
+            <div id="settings-notion" className="scroll-mt-6"><NotionSettings /></div>
+            <div id="settings-google" className="scroll-mt-6"><GoogleSettings /></div>
+            <div id="settings-inbox" className="scroll-mt-6"><InboxSettings /></div>
+            <div id="settings-display" className="scroll-mt-6"><DisplaySettings /></div>
+            <div id="settings-blocked" className="scroll-mt-6"><BlockedSendersSettings /></div>
+            <p className="pb-4 text-center text-[11.5px] text-fg-subtle">Microsoft Teams・その他メール（IMAP / Microsoft 365 等）の連携は今後追加予定です</p>
+          </div>
         </div>
       </div>
     </div>

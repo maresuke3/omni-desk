@@ -1,8 +1,10 @@
-import { ipcMain, nativeTheme, shell, type IpcMainInvokeEvent } from 'electron'
+import { BrowserWindow, ipcMain, nativeTheme, shell, type IpcMainInvokeEvent } from 'electron'
 import { AtlassianCliService } from '@omni-desk/connector-atlassian'
 import { verifyChatwork } from '@omni-desk/connector-chatwork'
 import { AppError, toErrorPayload } from '@omni-desk/connector-core'
 import { exchangeGitHubOAuthCode, verifyGitHub } from '@omni-desk/connector-github'
+import { startGoogleMailLoopbackOAuth, verifyGmailAccount } from '@omni-desk/connector-gmail'
+import { exchangeGoogleOAuthCode, startGoogleLoopbackOAuth, verifyGoogleCalendar } from '@omni-desk/connector-google-calendar'
 import { exchangeNotionOAuthCode, verifyNotion } from '@omni-desk/connector-notion'
 import { exchangeSlackOAuthCode, verifySlack } from '@omni-desk/connector-slack'
 import type {
@@ -20,10 +22,13 @@ import type {
 } from '@omni-desk/contracts'
 import { parseBlockedSender, parseSenderKey } from './blocked-senders'
 import { assertInboxId } from './inbox-state'
+import { getGoogleOAuthDefaults } from './oauth-defaults'
 import { settings } from './settings'
+import type { CalendarSyncService } from './sync/calendar'
 import type { StateHub } from './sync/hub'
 import type { InboxStateService } from './sync/inbox'
 import type { KnowledgeSyncService } from './sync/knowledge'
+import type { MailSyncService } from './sync/mail'
 import type { SyncManager } from './sync/manager'
 
 type Handler<C extends ApiChannel> = (...args: ApiArgs<C>) => ApiReturn<C> | Promise<ApiReturn<C>>
@@ -160,14 +165,16 @@ export function registerIpc(
   hub: StateHub,
   sync: SyncManager,
   inbox: InboxStateService,
-  knowledge: KnowledgeSyncService
+  knowledge: KnowledgeSyncService,
+  calendar: CalendarSyncService,
+  mail: MailSyncService
 ): void {
   const h = <C extends ApiChannel>(channel: C, fn: Handler<C>): void => handle(channel, isTrusted, fn)
 
   /** 設定を保存したら、状態ハブ経由で全画面に反映し、必要なら同期エンジンを作り直す */
   const publish = async (next: PublicSettings): Promise<PublicSettings> => {
     hub.setSettings(next)
-    await Promise.all([sync.apply(), knowledge.refresh()])
+    await Promise.all([sync.apply(), knowledge.refresh(), calendar.refresh(), mail.refresh()])
     return next
   }
 
@@ -212,7 +219,8 @@ export function registerIpc(
   h('github:connect', async (input) => {
     const token = requireString(input?.token, 'GitHub トークン')
     const info = await verifyGitHub(token)
-    await settings.setGitHub(info, token)
+    const label = input?.label?.trim() || undefined
+    await settings.setGitHub({ ...info, label }, token)
     return publish(settings.toPublic())
   })
   h('github:connect-oauth', async (input) => {
@@ -222,8 +230,8 @@ export function registerIpc(
     await settings.setGitHub(info, token)
     return publish(settings.toPublic())
   })
-  h('github:disconnect', () => {
-    settings.clearGitHub()
+  h('github:disconnect', (accountId) => {
+    settings.clearGitHub(accountId)
     return publish(settings.toPublic())
   })
   h('atlassian:connect', async (input) => {
@@ -265,15 +273,210 @@ export function registerIpc(
     settings.clearNotion()
     return publish(settings.toPublic())
   })
+  h('google:start-oauth', async (input) => {
+    const defaults = getGoogleOAuthDefaults()
+    const clientId = input?.clientId?.trim() || defaults.clientId
+    const clientSecret = input?.clientSecret?.trim() || defaults.clientSecret
+    if (!clientId) {
+      throw new AppError(
+        'not_configured',
+        'Google OAuth の Client ID が未設定です。.env.local に OMNI_GOOGLE_CLIENT_ID を設定するか、詳細設定から入力してください'
+      )
+    }
+    const tokens = await startGoogleLoopbackOAuth({
+      clientId,
+      clientSecret,
+      onOpenUrl: (url) => shell.openExternal(url)
+    })
+    const info = await verifyGoogleCalendar(tokens.accessToken)
+    const next = await settings.addGoogleAccount(
+      {
+        id: `google:${info.email}`,
+        email: info.email,
+        name: info.name,
+        avatarUrl: info.avatarUrl,
+        label: input?.label?.trim() || undefined
+      },
+      {
+        ...tokens,
+        clientId,
+        clientSecret
+      }
+    )
+    const win = BrowserWindow.getAllWindows()[0]
+    if (win) {
+      if (win.isMinimized()) win.restore()
+      win.focus()
+    }
+    return publish(next)
+  })
+  h('google:disconnect', (accountId) => publish(settings.clearGoogleAccount(accountId)))
+  h('google-calendar:start-oauth', async (input) => {
+    const defaults = getGoogleOAuthDefaults()
+    const clientId = input?.clientId?.trim() || defaults.clientId
+    const clientSecret = input?.clientSecret?.trim() || defaults.clientSecret
+    if (!clientId) {
+      throw new AppError(
+        'not_configured',
+        'Google OAuth の Client ID が未設定です。.env.local に OMNI_GOOGLE_CLIENT_ID を設定するか、詳細設定から入力してください'
+      )
+    }
+    const tokens = await startGoogleLoopbackOAuth({
+      clientId,
+      clientSecret,
+      onOpenUrl: (url) => shell.openExternal(url)
+    })
+    const info = await verifyGoogleCalendar(tokens.accessToken)
+    const next = await settings.addGoogleAccount(
+      {
+        id: `google:${info.email}`,
+        email: info.email,
+        name: info.name,
+        avatarUrl: info.avatarUrl,
+        label: input?.label?.trim() || undefined
+      },
+      {
+        ...tokens,
+        clientId,
+        clientSecret
+      }
+    )
+    const win = BrowserWindow.getAllWindows()[0]
+    if (win) {
+      if (win.isMinimized()) win.restore()
+      win.focus()
+    }
+    return publish(next)
+  })
+  h('google-calendar:connect-oauth', async (input) => {
+    const parsed = parseOAuthInput(input, false)
+    const tokens = await exchangeGoogleOAuthCode(parsed)
+    const info = await verifyGoogleCalendar(tokens.accessToken)
+    const next = await settings.addGoogleAccount(
+      { id: `google:${info.email}`, email: info.email, name: info.name, avatarUrl: info.avatarUrl },
+      { ...tokens, clientId: parsed.clientId, clientSecret: parsed.clientSecret }
+    )
+    return publish(next)
+  })
+  h('google-calendar:disconnect', () => {
+    return publish(settings.clearGoogleAccount())
+  })
+  h('calendar:refresh', () => calendar.refresh())
+  h('calendar:create', async (input) => {
+    const title = requireString(input?.title, '予定のタイトル')
+    return calendar.createEvent({
+      ...input,
+      title
+    })
+  })
+  h('calendar:update', async (input) => {
+    const calendarId = requireString(input?.calendarId, 'カレンダー ID')
+    const eventId = requireString(input?.eventId, '予定 ID')
+    return calendar.updateEvent(calendarId, eventId, input?.patch ?? {})
+  })
+  h('calendar:delete', async (input) => {
+    const calendarId = requireString(input?.calendarId, 'カレンダー ID')
+    const eventId = requireString(input?.eventId, '予定 ID')
+    await calendar.deleteEvent(calendarId, eventId)
+  })
+  h('google-mail:start-oauth', async (input) => {
+    const defaults = getGoogleOAuthDefaults()
+    const clientId = input?.clientId?.trim() || defaults.clientId
+    const clientSecret = input?.clientSecret?.trim() || defaults.clientSecret
+    if (!clientId) {
+      throw new AppError(
+        'not_configured',
+        'Google OAuth の Client ID が未設定です。.env.local に OMNI_GOOGLE_CLIENT_ID を設定するか、詳細設定から入力してください'
+      )
+    }
+    const tokens = await startGoogleMailLoopbackOAuth({
+      clientId,
+      clientSecret,
+      onOpenUrl: (url) => shell.openExternal(url)
+    })
+    const info = await verifyGmailAccount(tokens.accessToken)
+    const next = await settings.addGoogleAccount(
+      {
+        id: info.id,
+        email: info.email,
+        name: info.name,
+        avatarUrl: info.avatarUrl,
+        label: input?.label?.trim() || undefined
+      },
+      { ...tokens, clientId, clientSecret }
+    )
+    const win = BrowserWindow.getAllWindows()[0]
+    if (win) {
+      if (win.isMinimized()) win.restore()
+      win.focus()
+    }
+    return publish(next)
+  })
+  h('mail:disconnect', (accountId) => publish(settings.clearMailAccount(accountId)))
+  h('mail:refresh', (query) => mail.refresh(query))
+  h('mail:get-body', (input) =>
+    mail.getBody(
+      requireString(input?.accountId, 'アカウント ID'),
+      requireString(input?.messageId, 'メール ID')
+    )
+  )
+  h('mail:set-unread', (input) =>
+    mail.setUnread(
+      requireString(input?.accountId, 'アカウント ID'),
+      requireString(input?.messageId, 'メール ID'),
+      Boolean(input?.unread)
+    )
+  )
+  h('mail:archive', (input) =>
+    mail.archive(
+      requireString(input?.accountId, 'アカウント ID'),
+      requireString(input?.messageId, 'メール ID')
+    )
+  )
+  h('mail:send', async (input) => {
+    const accountId = requireString(input?.accountId, '送信元アカウント')
+    const to = requireString(input?.to, '宛先')
+    const subject = requireString(input?.subject, '件名')
+    const body = requireString(input?.body, '本文')
+    await mail.send({
+      accountId,
+      to,
+      cc: input?.cc?.trim() || undefined,
+      subject,
+      body,
+      threadId: input?.threadId,
+      inReplyTo: input?.inReplyTo
+    })
+  })
   h('knowledge:refresh', (query) => knowledge.refresh(query))
+  h('notion:create-page', async (input) => {
+    const parentId = requireString(input?.parentId, '作成先ページ / データベース')
+    const title = requireString(input?.title, 'タイトル')
+    return knowledge.createNotionPage({
+      parentId,
+      parentType: input?.parentType === 'database' ? 'database' : 'page',
+      title,
+      body: typeof input?.body === 'string' ? input.body : ''
+    })
+  })
   h('jira:create', async (input) => {
     const projectKey = requireString(input?.projectKey, 'プロジェクトキー')
     const summary = requireString(input?.summary, '件名')
+    const labels = Array.isArray(input?.labels)
+      ? input.labels.map((l) => String(l).trim()).filter(Boolean)
+      : undefined
     return knowledge.createJiraIssue({
       projectKey,
       summary,
       description: input?.description?.trim() || undefined,
-      issueType: input?.issueType?.trim() || undefined
+      issueType: input?.issueType?.trim() || undefined,
+      assignee: input?.assignee?.trim() || undefined,
+      labels: labels?.length ? labels : undefined,
+      parent: input?.parent?.trim() || undefined,
+      additionalAttributes:
+        input?.additionalAttributes && typeof input.additionalAttributes === 'object'
+          ? input.additionalAttributes
+          : undefined
     })
   })
   h('jira:update', async (input) => {
@@ -294,6 +497,8 @@ export function registerIpc(
   h('sync:refresh', () => {
     sync.refresh()
     void knowledge.refresh()
+    void calendar.refresh()
+    void mail.refresh()
   })
   h('sync:watch', (target) => sync.watch(target === null ? null : parseTarget(target)))
   h('message:send', (input) => sync.send(parseSendInput(input)))
