@@ -1,6 +1,7 @@
 import { AppError } from '@omni-desk/connector-core'
-import type { GitHubRepo, PullRequest, PullRequestRole } from '@omni-desk/contracts'
+import type { GitHubIssue, GitHubRepo, PullRequest, PullRequestRole } from '@omni-desk/contracts'
 import {
+  normalizeGitHubIssue,
   normalizeGitHubRepo,
   normalizePullRequest,
   type RawGitHubRepo,
@@ -70,17 +71,41 @@ export class GitHubService {
     return data.items.map((item) => normalizePullRequest(item, role))
   }
 
-  listMyPullRequests(perPage = 30): Promise<PullRequest[]> {
+  listMyPullRequests(perPage = 50): Promise<PullRequest[]> {
     return this.searchPullRequests('is:pr is:open author:@me', 'author', perPage)
   }
 
-  listReviewRequests(perPage = 30): Promise<PullRequest[]> {
+  listReviewRequests(perPage = 50): Promise<PullRequest[]> {
     return this.searchPullRequests('is:pr is:open review-requested:@me', 'reviewer', perPage)
   }
 
-  async listMyRepos(perPage = 30): Promise<GitHubRepo[]> {
-    const repos = await this.get<RawGitHubRepo[]>(`/user/repos?sort=updated&per_page=${perPage}`)
-    return repos.map(normalizeGitHubRepo)
+  async listAssignedIssues(perPage = 50): Promise<GitHubIssue[]> {
+    const params = new URLSearchParams({
+      q: 'is:issue is:open assignee:@me',
+      sort: 'updated',
+      order: 'desc',
+      per_page: String(perPage)
+    })
+    const data = await this.get<{ items: RawGitHubSearchIssue[] }>(`/search/issues?${params.toString()}`)
+    return data.items.map(normalizeGitHubIssue)
+  }
+
+  async listMyRepos(maxPages = 3): Promise<GitHubRepo[]> {
+    const all: GitHubRepo[] = []
+    for (let page = 1; page <= maxPages; page++) {
+      const params = new URLSearchParams({
+        affiliation: 'owner,collaborator,organization_member',
+        sort: 'updated',
+        per_page: '100',
+        page: String(page)
+      })
+      const repos = await this.get<RawGitHubRepo[]>(`/user/repos?${params.toString()}`)
+      for (const r of repos) {
+        if (!r.archived) all.push(normalizeGitHubRepo(r))
+      }
+      if (repos.length < 100) break
+    }
+    return all
   }
 }
 

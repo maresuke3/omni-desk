@@ -3,12 +3,20 @@ import type {
   AppSnapshot,
   AtlassianConnectInput,
   BlockedSender,
+  CalendarCreateInput,
+  CalendarEvent,
+  CalendarUpdateInput,
   ChatworkConnectInput,
   GitHubConnectInput,
+  GoogleOAuthStartInput,
   JiraCreateInput,
   JiraIssue,
   JiraUpdateInput,
+  KnowledgeDoc,
+  MailMessage,
+  MailSendInput,
   NotionConnectInput,
+  NotionPageCreateInput,
   OAuthConnectInput,
   PublicSettings,
   SenderKey,
@@ -42,14 +50,33 @@ export interface ApiContract {
   'chatwork:disconnect': () => PublicSettings
   'github:connect': (input: GitHubConnectInput) => PublicSettings
   'github:connect-oauth': (input: OAuthConnectInput) => PublicSettings
-  'github:disconnect': () => PublicSettings
+  'github:disconnect': (accountId?: string) => PublicSettings
   'atlassian:connect': (input: AtlassianConnectInput) => PublicSettings
   'atlassian:disconnect': () => PublicSettings
   'notion:connect': (input: NotionConnectInput) => PublicSettings
   'notion:connect-oauth': (input: OAuthConnectInput) => PublicSettings
   'notion:disconnect': () => PublicSettings
+  'google:start-oauth': (input?: GoogleOAuthStartInput) => PublicSettings
+  'google:disconnect': (accountId?: string) => PublicSettings
+  'google-calendar:start-oauth': (input?: GoogleOAuthStartInput) => PublicSettings
+  'google-calendar:connect-oauth': (input: OAuthConnectInput) => PublicSettings
+  'google-calendar:disconnect': () => PublicSettings
+  /** Google Calendar の予定を再取得する */
+  'calendar:refresh': () => void
+  'calendar:create': (input: CalendarCreateInput) => CalendarEvent
+  'calendar:update': (input: { calendarId: string; eventId: string; patch: CalendarUpdateInput }) => CalendarEvent
+  'calendar:delete': (input: { calendarId: string; eventId: string }) => void
+  'google-mail:start-oauth': (input?: GoogleOAuthStartInput) => PublicSettings
+  'mail:disconnect': (accountId?: string) => PublicSettings
+  /** メール一覧を再取得する（メモリ保持のみ） */
+  'mail:refresh': (query?: string) => void
+  'mail:get-body': (input: { accountId: string; messageId: string }) => MailMessage
+  'mail:set-unread': (input: { accountId: string; messageId: string; unread: boolean }) => void
+  'mail:archive': (input: { accountId: string; messageId: string }) => void
+  'mail:send': (input: MailSendInput) => void
   /** ナレッジボード（PR・リポジトリ・Jira・Confluence・Notion）を再取得する */
   'knowledge:refresh': (query?: { jql?: string; docQuery?: string }) => void
+  'notion:create-page': (input: NotionPageCreateInput) => KnowledgeDoc
   'jira:create': (input: JiraCreateInput) => JiraIssue
   'jira:update': (input: { key: string; patch: JiraUpdateInput }) => void
   'jira:comment': (input: { key: string; body: string }) => void
@@ -91,7 +118,24 @@ export const API_CHANNELS = [
   'notion:connect',
   'notion:connect-oauth',
   'notion:disconnect',
+  'google:start-oauth',
+  'google:disconnect',
+  'google-calendar:start-oauth',
+  'google-calendar:connect-oauth',
+  'google-calendar:disconnect',
+  'calendar:refresh',
+  'calendar:create',
+  'calendar:update',
+  'calendar:delete',
+  'google-mail:start-oauth',
+  'mail:disconnect',
+  'mail:refresh',
+  'mail:get-body',
+  'mail:set-unread',
+  'mail:archive',
+  'mail:send',
   'knowledge:refresh',
+  'notion:create-page',
   'jira:create',
   'jira:update',
   'jira:comment',

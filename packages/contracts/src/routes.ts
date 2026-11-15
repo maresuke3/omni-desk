@@ -12,7 +12,9 @@ export interface Route {
 export const FEATURE_IDS = {
   home: 'home',
   inbox: 'inbox',
+  mail: 'mail',
   tasks: 'tasks',
+  calendar: 'calendar',
   knowledge: 'knowledge',
   conversations: 'conversations',
   settings: 'settings'
@@ -24,7 +26,9 @@ export type FeatureId = (typeof FEATURE_IDS)[keyof typeof FEATURE_IDS]
 export const routes = {
   home: (): Route => ({ feature: FEATURE_IDS.home }),
   inbox: (): Route => ({ feature: FEATURE_IDS.inbox }),
+  mail: (): Route => ({ feature: FEATURE_IDS.mail }),
   tasks: (): Route => ({ feature: FEATURE_IDS.tasks }),
+  calendar: (): Route => ({ feature: FEATURE_IDS.calendar }),
   knowledge: (): Route => ({ feature: FEATURE_IDS.knowledge }),
   settings: (): Route => ({ feature: FEATURE_IDS.settings }),
   conversations: (source: Source, conversationId?: string): Route => ({

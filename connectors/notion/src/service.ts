@@ -1,5 +1,5 @@
 import { AppError } from '@omni-desk/connector-core'
-import type { KnowledgeDoc } from '@omni-desk/contracts'
+import type { KnowledgeDoc, NotionPageCreateInput } from '@omni-desk/contracts'
 import { normalizeNotionObject, type RawNotionObject } from './normalize'
 
 const NOTION_API = 'https://api.notion.com/v1'
@@ -77,6 +77,65 @@ export class NotionService {
     })
     return data.results.map(normalizeNotionObject)
   }
+
+  async createPage(input: NotionPageCreateInput): Promise<KnowledgeDoc> {
+    const title = input.title.trim()
+    if (!title) throw new AppError('invalid_input', 'タイトルを入力してください')
+
+    let titlePropName = 'title'
+    if (input.parentType === 'database') {
+      const db = await this.request<{ properties?: Record<string, { type?: string }> }>(
+        `/databases/${encodeURIComponent(input.parentId)}`
+      )
+      const found = Object.entries(db.properties ?? {}).find(([, prop]) => prop.type === 'title')
+      if (found) titlePropName = found[0]
+    }
+
+    const parent =
+      input.parentType === 'database'
+        ? { database_id: input.parentId }
+        : { page_id: input.parentId }
+
+    const children = toNotionBlocks(input.body)
+
+    const created = await this.request<RawNotionObject>('/pages', {
+      method: 'POST',
+      body: JSON.stringify({
+        parent,
+        properties: {
+          [titlePropName]: {
+            title: [{ text: { content: title } }]
+          }
+        },
+        ...(children.length > 0 ? { children } : {})
+      })
+    })
+    return normalizeNotionObject(created)
+  }
+}
+
+function toNotionBlocks(body: string): Array<Record<string, unknown>> {
+  const lines = body.replace(/\r\n/g, '\n').split('\n')
+  const blocks: Array<Record<string, unknown>> = []
+  for (const rawLine of lines) {
+    if (blocks.length >= 90) break
+    const line = rawLine.trimEnd()
+    if (!line.trim()) continue
+    const makeRich = (text: string) => [{ type: 'text', text: { content: text.slice(0, 1900) } }]
+
+    if (line.startsWith('### ')) {
+      blocks.push({ object: 'block', type: 'heading_3', heading_3: { rich_text: makeRich(line.slice(4)) } })
+    } else if (line.startsWith('## ')) {
+      blocks.push({ object: 'block', type: 'heading_2', heading_2: { rich_text: makeRich(line.slice(3)) } })
+    } else if (line.startsWith('# ')) {
+      blocks.push({ object: 'block', type: 'heading_1', heading_1: { rich_text: makeRich(line.slice(2)) } })
+    } else if (line.startsWith('- ') || line.startsWith('* ')) {
+      blocks.push({ object: 'block', type: 'bulleted_list_item', bulleted_list_item: { rich_text: makeRich(line.slice(2)) } })
+    } else {
+      blocks.push({ object: 'block', type: 'paragraph', paragraph: { rich_text: makeRich(line) } })
+    }
+  }
+  return blocks
 }
 
 export async function verifyNotion(token: string): Promise<NotionUserInfo> {

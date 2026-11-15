@@ -1,22 +1,31 @@
 import { create } from 'zustand'
 import { createJSONStorage, persist } from 'zustand/middleware'
 import {
+  emptyCalendarSnapshot,
   emptyKnowledgeSnapshot,
+  emptyMailSnapshot,
   emptyServiceSnapshot,
   routes,
   type AppSnapshot,
   type AtlassianConnectInput,
   type BlockedSender,
+  type CalendarCreateInput,
+  type CalendarSnapshot,
+  type CalendarUpdateInput,
   type ChatworkConnectInput,
   type GitHubConnectInput,
+  type GoogleOAuthStartInput,
   type HistorySnapshot,
   type InboxItemState,
   type InboxStatus,
   type JiraCreateInput,
   type JiraUpdateInput,
   type KnowledgeBoardSnapshot,
+  type MailSendInput,
+  type MailSnapshot,
   type Message,
   type NotionConnectInput,
+  type NotionPageCreateInput,
   type OAuthConnectInput,
   type PublicSettings,
   type Route,
@@ -87,6 +96,8 @@ export interface AppState {
   settings: PublicSettings | null
   services: Record<Source, ServiceSnapshot>
   knowledge: KnowledgeBoardSnapshot
+  calendar: CalendarSnapshot
+  mail: MailSnapshot
   histories: Record<string, HistorySnapshot>
   ui: UiState
   /** 入力中の本文（キーは入力欄ごと。例: `reply:chatwork:123:456`） */
@@ -103,7 +114,7 @@ export interface AppState {
   inboxUndo: InboxUndo | null
 }
 
-type SyncedState = Pick<AppState, 'seq' | 'settings' | 'services' | 'knowledge' | 'histories' | 'inboxStates'>
+type SyncedState = Pick<AppState, 'seq' | 'settings' | 'services' | 'knowledge' | 'calendar' | 'mail' | 'histories' | 'inboxStates'>
 
 const initialUi: UiState = {
   route: routes.home(),
@@ -125,6 +136,8 @@ export const useAppStore = create<AppState>()(
       settings: null,
       services: { slack: emptyServiceSnapshot(), chatwork: emptyServiceSnapshot() },
       knowledge: emptyKnowledgeSnapshot(),
+      calendar: emptyCalendarSnapshot(),
+      mail: emptyMailSnapshot(),
       histories: {},
       ui: initialUi,
       drafts: {},
@@ -167,6 +180,16 @@ export function applyStateEvent(state: SyncedState, event: StateEvent): Partial<
         seq: event.seq,
         knowledge: { ...state.knowledge, ...event.changes }
       }
+    case 'calendar':
+      return {
+        seq: event.seq,
+        calendar: { ...state.calendar, ...event.changes }
+      }
+    case 'mail':
+      return {
+        seq: event.seq,
+        mail: { ...state.mail, ...event.changes }
+      }
     case 'history': {
       const histories = { ...state.histories }
       if (event.history) histories[event.key] = event.history
@@ -179,6 +202,8 @@ export function applyStateEvent(state: SyncedState, event: StateEvent): Partial<
         settings: event.snapshot.settings,
         services: event.snapshot.services,
         knowledge: event.snapshot.knowledge,
+        calendar: event.snapshot.calendar,
+        mail: event.snapshot.mail ?? emptyMailSnapshot(),
         histories: event.snapshot.histories,
         inboxStates: event.snapshot.inboxStates
       }
@@ -208,6 +233,8 @@ const fromSnapshot = (s: AppSnapshot): SyncedState => ({
   settings: s.settings,
   services: s.services,
   knowledge: s.knowledge,
+  calendar: s.calendar,
+  mail: s.mail ?? emptyMailSnapshot(),
   histories: s.histories,
   inboxStates: s.inboxStates
 })
@@ -271,15 +298,38 @@ export const actions = {
   disconnectChatwork: () => withSettings(call('chatwork:disconnect')),
   connectGitHub: (input: GitHubConnectInput) => withSettings(call('github:connect', input)),
   connectGitHubOAuth: (input: OAuthConnectInput) => withSettings(call('github:connect-oauth', input)),
-  disconnectGitHub: () => withSettings(call('github:disconnect')),
+  disconnectGitHub: (accountId?: string) => withSettings(call('github:disconnect', accountId)),
   connectAtlassian: (input: AtlassianConnectInput) => withSettings(call('atlassian:connect', input)),
   disconnectAtlassian: () => withSettings(call('atlassian:disconnect')),
   connectNotion: (input: NotionConnectInput) => withSettings(call('notion:connect', input)),
   connectNotionOAuth: (input: OAuthConnectInput) => withSettings(call('notion:connect-oauth', input)),
   disconnectNotion: () => withSettings(call('notion:disconnect')),
+  startGoogleOAuth: (input?: GoogleOAuthStartInput) => withSettings(call('google:start-oauth', input)),
+  disconnectGoogleAccount: (accountId?: string) => withSettings(call('google:disconnect', accountId)),
+  startGoogleCalendarOAuth: (input?: GoogleOAuthStartInput) => withSettings(call('google-calendar:start-oauth', input)),
+  connectGoogleCalendarOAuth: (input: OAuthConnectInput) => withSettings(call('google-calendar:connect-oauth', input)),
+  disconnectGoogleCalendar: () => withSettings(call('google-calendar:disconnect')),
+  refreshCalendar: (): void => {
+    call('calendar:refresh').catch((error) => console.error(error))
+  },
+  createCalendarEvent: (input: CalendarCreateInput) => call('calendar:create', input),
+  updateCalendarEvent: (calendarId: string, eventId: string, patch: CalendarUpdateInput) =>
+    call('calendar:update', { calendarId, eventId, patch }),
+  deleteCalendarEvent: (calendarId: string, eventId: string) => call('calendar:delete', { calendarId, eventId }),
+  startGoogleMailOAuth: (input?: GoogleOAuthStartInput) => withSettings(call('google-mail:start-oauth', input)),
+  disconnectMailAccount: (accountId?: string) => withSettings(call('mail:disconnect', accountId)),
+  refreshMail: (query?: string): void => {
+    call('mail:refresh', query).catch((error) => console.error(error))
+  },
+  getMailBody: (accountId: string, messageId: string) => call('mail:get-body', { accountId, messageId }),
+  setMailUnread: (accountId: string, messageId: string, unread: boolean) =>
+    call('mail:set-unread', { accountId, messageId, unread }),
+  archiveMail: (accountId: string, messageId: string) => call('mail:archive', { accountId, messageId }),
+  sendMail: (input: MailSendInput) => call('mail:send', input),
   refreshKnowledge: (query?: { jql?: string; docQuery?: string }): void => {
     call('knowledge:refresh', query).catch((error) => console.error(error))
   },
+  createNotionPage: (input: NotionPageCreateInput) => call('notion:create-page', input),
   createJiraIssue: (input: JiraCreateInput) => call('jira:create', input),
   updateJiraIssue: (key: string, patch: JiraUpdateInput) => call('jira:update', { key, patch }),
   addJiraComment: (key: string, body: string) => call('jira:comment', { key, body }),

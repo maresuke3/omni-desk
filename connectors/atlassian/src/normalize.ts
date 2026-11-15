@@ -1,4 +1,15 @@
-import type { JiraIssue, JiraStatusCategory, KnowledgeDoc } from '@omni-desk/contracts'
+import type { JiraIssue, JiraProject, JiraStatusCategory, KnowledgeDoc } from '@omni-desk/contracts'
+
+export interface RawAcliJiraProject {
+  key?: string
+  name?: string
+}
+
+export function normalizeJiraProject(raw: RawAcliJiraProject): JiraProject | null {
+  const key = raw.key?.trim()
+  if (!key) return null
+  return { key, name: raw.name?.trim() || key }
+}
 
 export interface RawAcliJiraIssue {
   key: string

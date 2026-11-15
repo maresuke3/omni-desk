@@ -136,6 +136,10 @@ export interface ChatworkConnectionInfo {
 }
 
 export interface GitHubConnectionInfo {
+  /** 複数トークンを識別する ID（未設定の既存設定では login をフォールバックに使う） */
+  id?: string
+  /** 任意ラベル（例: 個人用 / 会社用） */
+  label?: string
   login: string
   name: string
   avatarUrl?: string
@@ -152,6 +156,37 @@ export interface NotionConnectionInfo {
   name: string
   avatarUrl?: string
   workspaceName?: string
+}
+
+export interface GoogleCalendarConnectionInfo {
+  email: string
+  name?: string
+  avatarUrl?: string
+}
+
+/** Google 連携アカウント情報（Calendar / Gmail など Google サービス共通） */
+export interface GoogleAccountInfo {
+  /** 例: `google:alice@gmail.com` */
+  id: string
+  email: string
+  name?: string
+  avatarUrl?: string
+  /** 任意ラベル（例: 仕事用 / 個人用） */
+  label?: string
+}
+
+/** 将来 Microsoft / IMAP 等を追加できるようプロバイダを識別可能にしておく */
+export type MailProvider = 'google'
+
+export interface MailAccountInfo {
+  /** 例: `google:alice@gmail.com` */
+  id: string
+  provider: MailProvider
+  email: string
+  name?: string
+  avatarUrl?: string
+  /** 任意ラベル（例: 仕事用 / 個人用） */
+  label?: string
 }
 
 /** 送信者を特定するキー。ID 体系がサービスごとに違うので source とセットで扱う */
@@ -174,8 +209,17 @@ export interface PublicSettings {
   slackWorkspaces: SlackConnectionInfo[]
   chatwork: ChatworkConnectionInfo | null
   github: GitHubConnectionInfo | null
+  /** 接続済みの全 GitHub アカウント（複数トークン対応） */
+  githubAccounts?: GitHubConnectionInfo[]
   atlassian: AtlassianConnectionInfo | null
   notion: NotionConnectionInfo | null
+  googleCalendar: GoogleCalendarConnectionInfo | null
+  /** 接続済みの全 Google アカウント（Calendar / Gmail 共通、複数アカウント対応） */
+  googleAccounts?: GoogleAccountInfo[]
+  /** 接続済みのメールアカウント一覧（複数メールアドレス対応） */
+  mailAccounts?: MailAccountInfo[]
+  /** ビルド時 / .env.local 等で既定の Google OAuth クライアントが設定済みか */
+  googleOAuthConfigured?: boolean
   refreshIntervalSec: number
   theme: ThemePreference
   /** 明示的にデモモードを有効にしているか */
@@ -274,12 +318,64 @@ export function buildNotionAuthorizeUrl(params: {
   return url.toString()
 }
 
+export const GOOGLE_CALENDAR_SCOPES = [
+  'https://www.googleapis.com/auth/calendar',
+  'https://www.googleapis.com/auth/userinfo.email',
+  'https://www.googleapis.com/auth/userinfo.profile'
+] as const
+
+export const GOOGLE_GMAIL_SCOPES = [
+  'https://www.googleapis.com/auth/gmail.modify',
+  'https://www.googleapis.com/auth/gmail.send',
+  'https://www.googleapis.com/auth/userinfo.email',
+  'https://www.googleapis.com/auth/userinfo.profile'
+] as const
+
+/** Google 連携の統合スコープ（Calendar + Gmail + プロフィール） */
+export const GOOGLE_OAUTH_SCOPES = [
+  'https://www.googleapis.com/auth/calendar',
+  'https://www.googleapis.com/auth/gmail.modify',
+  'https://www.googleapis.com/auth/gmail.send',
+  'https://www.googleapis.com/auth/userinfo.email',
+  'https://www.googleapis.com/auth/userinfo.profile'
+] as const
+
+export interface GoogleOAuthStartInput {
+  clientId?: string
+  clientSecret?: string
+  label?: string
+}
+
+/** Google OAuth 2.0 認可 URL を組み立てる（オフラインアクセス + PKCE 対応） */
+export function buildGoogleAuthorizeUrl(params: {
+  clientId: string
+  redirectUri: string
+  state: string
+  codeChallenge?: string
+  scopes?: readonly string[]
+}): string {
+  const url = new URL('https://accounts.google.com/o/oauth2/v2/auth')
+  url.searchParams.set('client_id', params.clientId.trim())
+  url.searchParams.set('redirect_uri', params.redirectUri.trim())
+  url.searchParams.set('response_type', 'code')
+  url.searchParams.set('scope', (params.scopes ?? GOOGLE_OAUTH_SCOPES).join(' '))
+  url.searchParams.set('access_type', 'offline')
+  url.searchParams.set('prompt', 'consent')
+  url.searchParams.set('state', params.state)
+  if (params.codeChallenge) {
+    url.searchParams.set('code_challenge', params.codeChallenge)
+    url.searchParams.set('code_challenge_method', 'S256')
+  }
+  return url.toString()
+}
+
 export interface ChatworkConnectInput {
   token: string
 }
 
 export interface GitHubConnectInput {
   token: string
+  label?: string
 }
 
 export interface AtlassianConnectInput {
@@ -380,8 +476,10 @@ export interface KnowledgeBoardSnapshot {
   error: ApiErrorPayload | null
   lastSyncedAt: number | null
   pullRequests: PullRequest[]
+  githubIssues?: GitHubIssue[]
   repos: GitHubRepo[]
   jiraIssues: JiraIssue[]
+  jiraProjects?: JiraProject[]
   docs: KnowledgeDoc[]
 }
 
@@ -390,9 +488,122 @@ export const emptyKnowledgeSnapshot = (): KnowledgeBoardSnapshot => ({
   error: null,
   lastSyncedAt: null,
   pullRequests: [],
+  githubIssues: [],
   repos: [],
   jiraIssues: [],
+  jiraProjects: [],
   docs: []
+})
+
+export interface CalendarAttendee {
+  email: string
+  displayName?: string
+  responseStatus?: 'accepted' | 'declined' | 'tentative' | 'needsAction'
+  self?: boolean
+}
+
+export interface CalendarEvent {
+  id: string
+  calendarId: string
+  /** どの Google アカウントの予定か（複数アカウント時の識別用） */
+  accountEmail?: string
+  title: string
+  description?: string
+  startAt: number
+  endAt: number
+  isAllDay: boolean
+  location?: string
+  meetUrl?: string
+  htmlLink: string
+  status: 'confirmed' | 'tentative' | 'cancelled'
+  attendees?: CalendarAttendee[]
+}
+
+export interface CalendarCreateInput {
+  title: string
+  startAt: number
+  endAt: number
+  isAllDay?: boolean
+  location?: string
+  description?: string
+  calendarId?: string
+}
+
+export interface CalendarUpdateInput {
+  title?: string
+  startAt?: number
+  endAt?: number
+  isAllDay?: boolean
+  location?: string
+  description?: string
+}
+
+export interface CalendarSnapshot {
+  loading: boolean
+  error: ApiErrorPayload | null
+  lastSyncedAt: number | null
+  events: CalendarEvent[]
+}
+
+export const emptyCalendarSnapshot = (): CalendarSnapshot => ({
+  loading: false,
+  error: null,
+  lastSyncedAt: null,
+  events: []
+})
+
+// ------------------------------------------------------------------ メール（Gmail ほか複数アカウント対応）
+
+export interface MailAddress {
+  name?: string
+  email: string
+}
+
+export interface MailMessage {
+  /** 一意 ID（`accountId:messageId`） */
+  id: string
+  /** プロバイダ側のメッセージ ID */
+  externalId: string
+  accountId: string
+  accountEmail: string
+  provider: MailProvider
+  threadId?: string
+  subject: string
+  from: MailAddress
+  to: string[]
+  cc?: string[]
+  snippet: string
+  /** 詳細表示時にオンデマンド取得（メモリのみ・非永続化） */
+  bodyText?: string
+  receivedAt: number
+  isUnread: boolean
+  isStarred?: boolean
+  labels?: string[]
+  webUrl?: string
+}
+
+export interface MailSendInput {
+  accountId: string
+  to: string
+  cc?: string
+  subject: string
+  body: string
+  threadId?: string
+  inReplyTo?: string
+}
+
+export interface MailSnapshot {
+  loading: boolean
+  error: ApiErrorPayload | null
+  lastSyncedAt: number | null
+  messages: MailMessage[]
+}
+
+export const emptyMailSnapshot = (): MailSnapshot => ({
+  loading: false,
+  error: null,
+  lastSyncedAt: null,
+  messages: []
 })
 
 export interface AppSnapshot {
@@ -401,6 +612,8 @@ export interface AppSnapshot {
   settings: PublicSettings
   services: Record<Source, ServiceSnapshot>
   knowledge: KnowledgeBoardSnapshot
+  calendar: CalendarSnapshot
+  mail?: MailSnapshot
   histories: Record<string, HistorySnapshot>
   /** 受信箱の対応状況（キーは Message.id。未対応のものは持たない） */
   inboxStates: Record<string, InboxItemState>
@@ -411,6 +624,8 @@ export type StatePatch =
   | { kind: 'settings'; settings: PublicSettings }
   | { kind: 'service'; source: Source; changes: Partial<ServiceSnapshot> }
   | { kind: 'knowledge'; changes: Partial<KnowledgeBoardSnapshot> }
+  | { kind: 'calendar'; changes: Partial<CalendarSnapshot> }
+  | { kind: 'mail'; changes: Partial<MailSnapshot> }
   | { kind: 'history'; key: string; history: HistorySnapshot | null }
   | { kind: 'reset'; snapshot: AppSnapshot }
   | { kind: 'inbox-states'; states: Record<string, InboxItemState> }
@@ -475,6 +690,9 @@ export type KnowledgeSource = 'confluence' | 'notion'
 /** Confluence / Notion で共有された資料・ナレッジの共通型 */
 export interface KnowledgeDoc {
   id: string
+  /** プロバイダ側の生 ID（Notion のページ作成時の親指定などに利用） */
+  rawId?: string
+  objectType?: 'page' | 'database'
   source: KnowledgeSource
   title: string
   /** Confluence のスペース名 / Notion の親ページ・DB 名 */
@@ -483,6 +701,13 @@ export interface KnowledgeDoc {
   url: string
   author?: Person
   updatedAt: number
+}
+
+export interface NotionPageCreateInput {
+  parentId: string
+  parentType?: 'page' | 'database'
+  title: string
+  body: string
 }
 
 export type PullRequestRole = 'author' | 'reviewer'
@@ -505,9 +730,24 @@ export interface PullRequest {
 export interface GitHubRepo {
   id: string
   fullName: string
+  owner?: string
+  language?: string
+  archived?: boolean
   description?: string
   url: string
   isPrivate: boolean
+  updatedAt: number
+}
+
+export interface GitHubIssue {
+  id: string
+  number: number
+  title: string
+  repo: string
+  url: string
+  state: 'open' | 'closed'
+  author: Person
+  labels?: string[]
   updatedAt: number
 }
 
@@ -526,11 +766,21 @@ export interface JiraIssue {
   url?: string
 }
 
+export interface JiraProject {
+  key: string
+  name: string
+  issueTypes?: string[]
+}
+
 export interface JiraCreateInput {
   projectKey: string
   summary: string
   description?: string
   issueType?: string
+  assignee?: string
+  labels?: string[]
+  parent?: string
+  additionalAttributes?: Record<string, unknown>
 }
 
 export interface JiraUpdateInput {

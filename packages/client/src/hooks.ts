@@ -1,12 +1,16 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
+  emptyCalendarSnapshot,
+  emptyMailSnapshot,
   historyKey,
   type ApiErrorPayload,
+  type CalendarSnapshot,
   type InboxStatus,
   type ChatworkStatus,
   type Conversation,
   type HistorySnapshot,
   type KnowledgeBoardSnapshot,
+  type MailSnapshot,
   type Message,
   type PublicSettings,
   type RateStatus,
@@ -29,6 +33,18 @@ export function useSettings(): PublicSettings {
   const settings = useAppStore((s) => s.settings)
   if (!settings) throw new Error('ストアが初期化されていません（initStore の完了前に描画しています）')
   return settings
+}
+
+const EMPTY_CALENDAR = emptyCalendarSnapshot()
+
+export function useCalendar(): CalendarSnapshot {
+  return useAppStore((s) => s.calendar ?? EMPTY_CALENDAR)
+}
+
+const EMPTY_MAIL = emptyMailSnapshot()
+
+export function useMail(): MailSnapshot {
+  return useAppStore((s) => s.mail ?? EMPTY_MAIL)
 }
 
 export function useServiceState(source: Source): { enabled: boolean; connected: boolean; demo: boolean } {

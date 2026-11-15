@@ -1,12 +1,18 @@
 import { execFile } from 'node:child_process'
+import { randomUUID } from 'node:crypto'
+import { unlink, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { promisify } from 'node:util'
 import { AppError } from '@omni-desk/connector-core'
-import type { JiraCreateInput, JiraIssue, JiraUpdateInput, KnowledgeDoc } from '@omni-desk/contracts'
+import type { JiraCreateInput, JiraIssue, JiraProject, JiraUpdateInput, KnowledgeDoc } from '@omni-desk/contracts'
 import {
   normalizeConfluencePage,
   normalizeJiraIssue,
+  normalizeJiraProject,
   type RawAcliConfluencePage,
-  type RawAcliJiraIssue
+  type RawAcliJiraIssue,
+  type RawAcliJiraProject
 } from './normalize'
 
 const execFileAsync = promisify(execFile)
@@ -68,6 +74,18 @@ export class AtlassianCliService {
     return { version: out.trim() }
   }
 
+  async listJiraProjects(limit = 50): Promise<JiraProject[]> {
+    const raw = await this.runJson<RawAcliJiraProject[] | { values?: RawAcliJiraProject[]; projects?: RawAcliJiraProject[] }>([
+      'jira',
+      'project',
+      'list',
+      '--limit',
+      String(limit)
+    ])
+    const list = Array.isArray(raw) ? raw : (raw.values ?? raw.projects ?? [])
+    return list.map(normalizeJiraProject).filter((p): p is JiraProject => p !== null)
+  }
+
   async searchJiraIssues(jql = 'assignee = currentUser() ORDER BY updated DESC', limit = 30): Promise<JiraIssue[]> {
     const raw = await this.runJson<RawAcliJiraIssue[] | { issues?: RawAcliJiraIssue[] }>([
       'jira',
@@ -83,6 +101,34 @@ export class AtlassianCliService {
   }
 
   async createJiraIssue(input: JiraCreateInput): Promise<JiraIssue> {
+    if (input.additionalAttributes && Object.keys(input.additionalAttributes).length > 0) {
+      const payload: Record<string, unknown> = {
+        projectKey: input.projectKey,
+        type: input.issueType ?? 'Task',
+        summary: input.summary,
+        additionalAttributes: input.additionalAttributes
+      }
+      if (input.description) {
+        payload.description = {
+          type: 'doc',
+          version: 1,
+          content: [{ type: 'paragraph', content: [{ type: 'text', text: input.description }] }]
+        }
+      }
+      if (input.assignee) payload.assignee = input.assignee
+      if (input.labels?.length) payload.labels = input.labels
+      if (input.parent) payload.parentIssueId = input.parent
+
+      const tmpPath = join(tmpdir(), `omni-jira-${randomUUID()}.json`)
+      await writeFile(tmpPath, JSON.stringify(payload, null, 2), 'utf8')
+      try {
+        const created = await this.runJson<RawAcliJiraIssue>(['jira', 'workitem', 'create', '--from-json', tmpPath])
+        return normalizeJiraIssue(created, this.siteUrl)
+      } finally {
+        await unlink(tmpPath).catch(() => undefined)
+      }
+    }
+
     const args = [
       'jira',
       'workitem',
@@ -96,6 +142,15 @@ export class AtlassianCliService {
     ]
     if (input.description) {
       args.push('--description', input.description)
+    }
+    if (input.assignee) {
+      args.push('--assignee', input.assignee)
+    }
+    if (input.labels && input.labels.length > 0) {
+      args.push('--label', input.labels.join(','))
+    }
+    if (input.parent) {
+      args.push('--parent', input.parent)
     }
     const created = await this.runJson<RawAcliJiraIssue>(args)
     return normalizeJiraIssue(created, this.siteUrl)

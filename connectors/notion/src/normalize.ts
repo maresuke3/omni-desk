@@ -52,6 +52,8 @@ export function normalizeNotionObject(obj: RawNotionObject): KnowledgeDoc {
 
   return {
     id: `notion:${obj.id}`,
+    rawId: obj.id,
+    objectType: obj.object,
     source: 'notion',
     title: extractNotionTitle(obj),
     spaceOrParent,
