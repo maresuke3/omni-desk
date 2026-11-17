@@ -220,6 +220,8 @@ export interface PublicSettings {
   mailAccounts?: MailAccountInfo[]
   /** ビルド時 / .env.local 等で既定の Google OAuth クライアントが設定済みか */
   googleOAuthConfigured?: boolean
+  /** ビルド時 / .env.local 等で既定の GitHub OAuth クライアントが設定済みか */
+  githubOAuthConfigured?: boolean
   refreshIntervalSec: number
   theme: ThemePreference
   /** 明示的にデモモードを有効にしているか */
@@ -287,6 +289,12 @@ export function buildSlackAuthorizeUrl(params: {
   url.searchParams.set('redirect_uri', params.redirectUri.trim())
   url.searchParams.set('state', params.state)
   return url.toString()
+}
+
+export interface GitHubOAuthStartInput {
+  clientId?: string
+  clientSecret?: string
+  label?: string
 }
 
 /** GitHub OAuth 2.0 認可 URL を組み立てる */

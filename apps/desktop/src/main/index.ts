@@ -1,7 +1,8 @@
-import { app, BrowserWindow, Menu, nativeTheme, powerMonitor, shell, type IpcMainInvokeEvent, type MenuItemConstructorOptions } from 'electron'
+import { app, BrowserWindow, Menu, nativeTheme, powerMonitor, type IpcMainInvokeEvent, type MenuItemConstructorOptions } from 'electron'
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { applyTheme, registerIpc } from './ipc'
+import { openExternalUrl } from './open-external'
 import { settings } from './settings'
 import { StateHub } from './sync/hub'
 import { CalendarSyncService } from './sync/calendar'
@@ -73,14 +74,14 @@ function createWindow(): BrowserWindow {
 
   // 外部リンクはアプリ内で開かず既定のブラウザへ
   win.webContents.setWindowOpenHandler(({ url }) => {
-    if (url.startsWith('https://')) void shell.openExternal(url)
+    if (url.startsWith('https://')) void openExternalUrl(url)
     return { action: 'deny' }
   })
   win.webContents.on('will-navigate', (event, url) => {
     const internal = devServerUrl ? url.startsWith(devServerUrl) : url.startsWith('file://')
     if (!internal) {
       event.preventDefault()
-      if (url.startsWith('https://')) void shell.openExternal(url)
+      if (url.startsWith('https://')) void openExternalUrl(url)
     }
   })
 

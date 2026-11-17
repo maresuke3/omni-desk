@@ -21,7 +21,7 @@ import { CHATWORK_DEMO_ACCOUNT_ID } from '@omni-desk/connector-chatwork'
 import { AppError } from '@omni-desk/connector-core'
 import { SLACK_DEMO_USER_ID } from '@omni-desk/connector-slack'
 import { addBlockedSender, removeBlockedSender, sanitizeBlockedSenders } from './blocked-senders'
-import { getGoogleOAuthDefaults } from './oauth-defaults'
+import { getGitHubOAuthDefaults, getGoogleOAuthDefaults } from './oauth-defaults'
 
 /**
  * 設定の永続化。トークン類は safeStorage（macOS はキーチェーン）で暗号化し、
@@ -283,6 +283,7 @@ class SettingsStore {
       googleAccounts,
       mailAccounts,
       googleOAuthConfigured: Boolean(getGoogleOAuthDefaults().clientId),
+      githubOAuthConfigured: Boolean(getGitHubOAuthDefaults().clientId && getGitHubOAuthDefaults().clientSecret),
       refreshIntervalSec: s.refreshIntervalSec,
       theme: s.theme,
       demoMode: s.demoMode,

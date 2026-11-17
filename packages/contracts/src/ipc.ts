@@ -8,6 +8,7 @@ import type {
   CalendarUpdateInput,
   ChatworkConnectInput,
   GitHubConnectInput,
+  GitHubOAuthStartInput,
   GoogleOAuthStartInput,
   JiraCreateInput,
   JiraIssue,
@@ -50,6 +51,7 @@ export interface ApiContract {
   'chatwork:disconnect': () => PublicSettings
   'github:connect': (input: GitHubConnectInput) => PublicSettings
   'github:connect-oauth': (input: OAuthConnectInput) => PublicSettings
+  'github:start-oauth': (input?: GitHubOAuthStartInput) => PublicSettings
   'github:disconnect': (accountId?: string) => PublicSettings
   'atlassian:connect': (input: AtlassianConnectInput) => PublicSettings
   'atlassian:disconnect': () => PublicSettings
@@ -112,6 +114,7 @@ export const API_CHANNELS = [
   'chatwork:disconnect',
   'github:connect',
   'github:connect-oauth',
+  'github:start-oauth',
   'github:disconnect',
   'atlassian:connect',
   'atlassian:disconnect',

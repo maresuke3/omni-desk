@@ -1,8 +1,8 @@
-import { BrowserWindow, ipcMain, nativeTheme, shell, type IpcMainInvokeEvent } from 'electron'
+import { BrowserWindow, ipcMain, nativeTheme, type IpcMainInvokeEvent } from 'electron'
 import { AtlassianCliService } from '@omni-desk/connector-atlassian'
 import { verifyChatwork } from '@omni-desk/connector-chatwork'
 import { AppError, toErrorPayload } from '@omni-desk/connector-core'
-import { exchangeGitHubOAuthCode, verifyGitHub } from '@omni-desk/connector-github'
+import { exchangeGitHubOAuthCode, startGitHubLoopbackOAuth, verifyGitHub } from '@omni-desk/connector-github'
 import { startGoogleMailLoopbackOAuth, verifyGmailAccount } from '@omni-desk/connector-gmail'
 import { exchangeGoogleOAuthCode, startGoogleLoopbackOAuth, verifyGoogleCalendar } from '@omni-desk/connector-google-calendar'
 import { exchangeNotionOAuthCode, verifyNotion } from '@omni-desk/connector-notion'
@@ -22,7 +22,8 @@ import type {
 } from '@omni-desk/contracts'
 import { parseBlockedSender, parseSenderKey } from './blocked-senders'
 import { assertInboxId } from './inbox-state'
-import { getGoogleOAuthDefaults } from './oauth-defaults'
+import { getGitHubOAuthDefaults, getGoogleOAuthDefaults } from './oauth-defaults'
+import { openExternalUrl } from './open-external'
 import { settings } from './settings'
 import type { CalendarSyncService } from './sync/calendar'
 import type { StateHub } from './sync/hub'
@@ -230,6 +231,26 @@ export function registerIpc(
     await settings.setGitHub(info, token)
     return publish(settings.toPublic())
   })
+  h('github:start-oauth', async (input) => {
+    const defaults = getGitHubOAuthDefaults()
+    const clientId = input?.clientId?.trim() || defaults.clientId
+    const clientSecret = input?.clientSecret?.trim() || defaults.clientSecret
+    if (!clientId || !clientSecret) {
+      throw new AppError(
+        'not_configured',
+        'GitHub OAuth の Client ID / Client Secret が未設定です。.env.local に OMNI_GITHUB_CLIENT_ID / OMNI_GITHUB_CLIENT_SECRET を設定するか、詳細設定から入力してください'
+      )
+    }
+    const token = await startGitHubLoopbackOAuth({
+      clientId,
+      clientSecret,
+      onOpenUrl: (url) => openExternalUrl(url)
+    })
+    const info = await verifyGitHub(token)
+    const label = input?.label?.trim() || undefined
+    await settings.setGitHub(label ? { ...info, label } : info, token)
+    return publish(settings.toPublic())
+  })
   h('github:disconnect', (accountId) => {
     settings.clearGitHub(accountId)
     return publish(settings.toPublic())
@@ -286,7 +307,7 @@ export function registerIpc(
     const tokens = await startGoogleLoopbackOAuth({
       clientId,
       clientSecret,
-      onOpenUrl: (url) => shell.openExternal(url)
+      onOpenUrl: (url) => openExternalUrl(url)
     })
     const info = await verifyGoogleCalendar(tokens.accessToken)
     const next = await settings.addGoogleAccount(
@@ -324,7 +345,7 @@ export function registerIpc(
     const tokens = await startGoogleLoopbackOAuth({
       clientId,
       clientSecret,
-      onOpenUrl: (url) => shell.openExternal(url)
+      onOpenUrl: (url) => openExternalUrl(url)
     })
     const info = await verifyGoogleCalendar(tokens.accessToken)
     const next = await settings.addGoogleAccount(
@@ -392,7 +413,7 @@ export function registerIpc(
     const tokens = await startGoogleMailLoopbackOAuth({
       clientId,
       clientSecret,
-      onOpenUrl: (url) => shell.openExternal(url)
+      onOpenUrl: (url) => openExternalUrl(url)
     })
     const info = await verifyGmailAccount(tokens.accessToken)
     const next = await settings.addGoogleAccount(
@@ -522,6 +543,6 @@ export function registerIpc(
   h('app:open-external', async (url) => {
     const parsed = new URL(requireString(url, 'URL'))
     if (parsed.protocol !== 'https:') throw new AppError('invalid_input', 'https の URL のみ開けます')
-    await shell.openExternal(parsed.toString())
+    await openExternalUrl(parsed.toString())
   })
 }

@@ -16,7 +16,6 @@ import {
   Ticket
 } from 'lucide-react'
 import {
-  buildGitHubAuthorizeUrl,
   buildNotionAuthorizeUrl,
   buildSlackAuthorizeUrl,
   SLACK_USER_SCOPES,
@@ -649,22 +648,25 @@ function BlockedSendersSettings() {
 function GitHubSettings() {
   const settings = useSettings()
   const connect = useAsyncAction(actions.connectGitHub)
-  const connectOAuth = useAsyncAction(actions.connectGitHubOAuth)
+  const startOAuth = useAsyncAction(actions.startGitHubOAuth)
   const disconnect = useAsyncAction(actions.disconnectGitHub)
   const [disconnectingId, setDisconnectingId] = useState<string | null>(null)
   const [adding, setAdding] = useState(false)
   const [mode, setMode] = useState<'token' | 'oauth'>('token')
   const [token, setToken] = useState('')
   const [label, setLabel] = useState('')
-  const [oauth, setOauth] = useState<OAuthConnectInput>(EMPTY_OAUTH)
+  const [showCustom, setShowCustom] = useState(false)
+  const [clientId, setClientId] = useState('')
+  const [clientSecret, setClientSecret] = useState('')
 
   const accounts = settings.githubAccounts ?? (settings.github ? [settings.github] : [])
   const showForm = accounts.length === 0 || adding
-  const activePending = mode === 'oauth' ? connectOAuth.pending : connect.pending
-  const activeError = mode === 'oauth' ? connectOAuth.error : connect.error
+  const hasDefaults = Boolean(settings.githubOAuthConfigured)
+  const activePending = mode === 'oauth' ? startOAuth.pending : connect.pending
+  const activeError = mode === 'oauth' ? startOAuth.error : connect.error
   const canSubmit =
     mode === 'oauth'
-      ? Boolean(oauth.clientId.trim() && oauth.clientSecret.trim() && oauth.redirectUri.trim() && oauth.codeOrUrl.trim())
+      ? hasDefaults || Boolean(clientId.trim() && clientSecret.trim())
       : Boolean(token.trim())
 
   return (
@@ -716,12 +718,20 @@ function GitHubSettings() {
             onSubmit={(e: React.FormEvent) => {
               e.preventDefault()
               if (mode === 'oauth') {
-                void connectOAuth.run(oauth).then((ok) => {
-                  if (ok) {
-                    setOauth(EMPTY_OAUTH)
-                    setAdding(false)
-                  }
-                })
+                void startOAuth
+                  .run({
+                    clientId: clientId.trim() || undefined,
+                    clientSecret: clientSecret.trim() || undefined,
+                    label: label.trim() || undefined
+                  })
+                  .then((ok) => {
+                    if (ok) {
+                      setLabel('')
+                      setClientId('')
+                      setClientSecret('')
+                      setAdding(false)
+                    }
+                  })
                 return
               }
               void connect.run({ token, label: label.trim() || undefined }).then((ok) => {
@@ -741,40 +751,81 @@ function GitHubSettings() {
                 { value: 'oauth', label: 'OAuth 認可' }
               ]}
             />
+            <SecretInput label="ラベル（任意）" value={label} onChange={setLabel} placeholder="例: 個人用 / 会社用" secret={false} />
             {mode === 'token' ? (
-              <Stack spacing={2}>
-                <SecretInput label="ラベル（任意）" value={label} onChange={setLabel} placeholder="例: 個人用 / 会社用" secret={false} />
-                <SecretInput
-                  label="Personal Access Token"
-                  value={token}
-                  onChange={setToken}
-                  placeholder="ghp_... / github_pat_..."
-                  hint="repo / read:user スコープを持つトークンを入力してください（Organization 用トークンも追加できます）。"
-                />
-              </Stack>
-            ) : (
-              <OAuthFields
-                value={oauth}
-                onChange={setOauth}
-                redirectPlaceholder="http://localhost:3000/github/callback"
-                requireHttps={false}
-                buildAuthorizeUrl={buildGitHubAuthorizeUrl}
-                steps={
-                  <>
-                    <li>GitHub の Developer Settings → OAuth Apps でアプリを作成し、Authorization callback URL を登録</li>
-                    <li>Client ID / Client Secret / Redirect URL を入力し、「ブラウザで認可ページを開く」から認可</li>
-                    <li>リダイレクト先の URL 全体（または <code>code</code>）を貼り付けて保存</li>
-                  </>
-                }
+              <SecretInput
+                label="Personal Access Token"
+                value={token}
+                onChange={setToken}
+                placeholder="ghp_... / github_pat_..."
+                hint="repo / read:user スコープを持つトークンを入力してください（Organization 用トークンも追加できます）。"
               />
+            ) : (
+              <Stack spacing={2}>
+                <Typography variant="body2" color="text.secondary">
+                  ボタンを押すとブラウザで GitHub の認可画面が開き、許可するだけで自動的に連携されます（Callback URL は{' '}
+                  <code>http://127.0.0.1/callback</code> を設定してください）。
+                </Typography>
+
+                {!hasDefaults && !showCustom && (
+                  <Alert severity="warning">
+                    既定の OAuth クライアントが未設定です。リポジトリ直下の <code>.env.local</code> に{' '}
+                    <code>OMNI_GITHUB_CLIENT_ID</code> / <code>OMNI_GITHUB_CLIENT_SECRET</code> を設定するか、下から入力してください。
+                  </Alert>
+                )}
+
+                {(showCustom || !hasDefaults) && (
+                  <Paper
+                    variant="outlined"
+                    sx={(theme) => ({
+                      p: 2,
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: 2,
+                      bgcolor: theme.palette.mode === 'dark' ? '#12151a' : '#f6f7f9'
+                    })}
+                  >
+                    <Box sx={{ display: 'grid', gap: 2, gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' } }}>
+                      <SecretInput
+                        label="Client ID"
+                        value={clientId}
+                        onChange={setClientId}
+                        placeholder="Ov23li..."
+                        secret={false}
+                      />
+                      <SecretInput
+                        label="Client Secret"
+                        value={clientSecret}
+                        onChange={setClientSecret}
+                        placeholder="Client Secret"
+                      />
+                    </Box>
+                    <Typography variant="caption" color="text.disabled">
+                      ※ リダイレクト URI の手入力や URL のコピペは不要です（ローカルの一時ポートで自動受信します）。
+                    </Typography>
+                  </Paper>
+                )}
+              </Stack>
             )}
-            <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+            <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', alignItems: 'center' }}>
               <Button type="submit" variant="primary" loading={activePending} disabled={!canSubmit}>
-                接続をテストして保存
+                {mode === 'oauth' ? (
+                  <>
+                    <ExternalLink size={16} />
+                    {startOAuth.pending ? 'ブラウザで認証を待機中…' : 'GitHub アカウントと連携'}
+                  </>
+                ) : (
+                  '接続をテストして保存'
+                )}
               </Button>
               {accounts.length > 0 && (
                 <Button type="button" size="sm" onClick={() => setAdding(false)}>
                   キャンセル
+                </Button>
+              )}
+              {mode === 'oauth' && hasDefaults && (
+                <Button type="button" size="sm" variant="ghost" onClick={() => setShowCustom((v) => !v)}>
+                  {showCustom ? '詳細設定を閉じる' : '別の OAuth アプリを使う'}
                 </Button>
               )}
             </Stack>

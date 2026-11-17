@@ -55,7 +55,7 @@ function readGoogleSecretJson(dirs: string[]): { clientId?: string; clientSecret
   return {}
 }
 
-export function getGoogleOAuthDefaults(): { clientId?: string; clientSecret?: string } {
+function loadEnvFiles(): Record<string, string> {
   const dirs = candidateDirs()
   const env: Record<string, string> = {}
   for (const dir of [...dirs].reverse()) {
@@ -63,11 +63,23 @@ export function getGoogleOAuthDefaults(): { clientId?: string; clientSecret?: st
       Object.assign(env, parseEnvFile(join(dir, file)))
     }
   }
+  return env
+}
 
+export function getGoogleOAuthDefaults(): { clientId?: string; clientSecret?: string } {
+  const dirs = candidateDirs()
+  const env = loadEnvFiles()
   const fromJson = readGoogleSecretJson(dirs)
   const clientId = process.env.OMNI_GOOGLE_CLIENT_ID?.trim() || env.OMNI_GOOGLE_CLIENT_ID || fromJson.clientId
   const clientSecret =
     process.env.OMNI_GOOGLE_CLIENT_SECRET?.trim() || env.OMNI_GOOGLE_CLIENT_SECRET || fromJson.clientSecret
 
+  return { clientId, clientSecret }
+}
+
+export function getGitHubOAuthDefaults(): { clientId?: string; clientSecret?: string } {
+  const env = loadEnvFiles()
+  const clientId = process.env.OMNI_GITHUB_CLIENT_ID?.trim() || env.OMNI_GITHUB_CLIENT_ID
+  const clientSecret = process.env.OMNI_GITHUB_CLIENT_SECRET?.trim() || env.OMNI_GITHUB_CLIENT_SECRET
   return { clientId, clientSecret }
 }
