@@ -1,0 +1,55 @@
+---
+- name: Setup Omni Desk development environment
+  hosts: local
+  gather_facts: true
+  vars:
+    repo_root: "{{ playbook_dir | dirname | dirname }}"
+    fontconfig_dir: "{{ ansible_facts['user_dir'] }}/.config/fontconfig"
+    electron_path_txt: "{{ repo_root }}/apps/desktop/node_modules/electron/path.txt"
+  tasks:
+    - name: Check if Windows Fonts directory exists (WSL2)
+      ansible.builtin.stat:
+        path: /mnt/c/Windows/Fonts
+      register: win_fonts
+      when: ansible_facts['system'] == 'Linux'
+
+    - name: Ensure user fontconfig directory exists (WSL2)
+      ansible.builtin.file:
+        path: "{{ fontconfig_dir }}"
+        state: directory
+        mode: "0755"
+      when: ansible_facts['system'] == 'Linux' and win_fonts.stat.exists
+
+    - name: Configure fontconfig to use Windows Fonts (WSL2)
+      ansible.builtin.copy:
+        dest: "{{ fontconfig_dir }}/fonts.conf"
+        mode: "0644"
+        content: |
+          <?xml version="1.0"?>
+          <!DOCTYPE fontconfig SYSTEM "urn:fontconfig:fonts.dtd">
+          <fontconfig>
+            <dir>/mnt/c/Windows/Fonts</dir>
+          </fontconfig>
+      register: fontconfig_updated
+      when: ansible_facts['system'] == 'Linux' and win_fonts.stat.exists
+
+    - name: Refresh fontconfig cache (WSL2)
+      ansible.builtin.command: fc-cache -f
+      when: ansible_facts['system'] == 'Linux' and win_fonts.stat.exists and fontconfig_updated.changed
+
+    - name: Install workspace dependencies with pnpm
+      ansible.builtin.command: pnpm install
+      args:
+        chdir: "{{ repo_root }}"
+      changed_when: false
+
+    - name: Check if Electron binary path.txt exists
+      ansible.builtin.stat:
+        path: "{{ electron_path_txt }}"
+      register: electron_path_stat
+
+    - name: Download Electron binary if missing
+      ansible.builtin.command: node apps/desktop/node_modules/electron/install.js
+      args:
+        chdir: "{{ repo_root }}"
+      when: not electron_path_stat.stat.exists

@@ -1,0 +1,30 @@
+---
+- name: Build production distribution package (.dmg / .exe) with Vault secrets
+  hosts: local
+  gather_facts: true
+  vars:
+    repo_root: "{{ playbook_dir | dirname | dirname }}"
+    secrets_file: "{{ inventory_dir }}/group_vars/all/secrets.yml"
+    dist_target: "{{ target | default('mac' if ansible_facts['system'] == 'Darwin' else 'win') }}"
+    dist_cmd: "{{ 'pnpm dist:mac' if dist_target == 'mac' else 'pnpm dist:win' }}"
+  tasks:
+    - name: Check secrets.yml exists in active inventory
+      ansible.builtin.stat:
+        path: "{{ secrets_file }}"
+      register: secrets_stat
+
+    - name: Fail if secrets.yml is missing
+      ansible.builtin.fail:
+        msg: "Secrets file not found: {{ secrets_file }} (copy secrets.yml.example and encrypt with ansible-vault)"
+      when: not secrets_stat.stat.exists
+
+    - name: Run distribution build ({{ dist_cmd }})
+      ansible.builtin.command: "{{ dist_cmd }}"
+      args:
+        chdir: "{{ repo_root }}"
+      environment:
+        OMNI_GOOGLE_CLIENT_ID: "{{ vault_omni_google_client_id | default('', true) }}"
+        OMNI_GOOGLE_CLIENT_SECRET: "{{ vault_omni_google_client_secret | default('', true) }}"
+        OMNI_GITHUB_CLIENT_ID: "{{ vault_omni_github_client_id | default('', true) }}"
+        OMNI_GITHUB_CLIENT_SECRET: "{{ vault_omni_github_client_secret | default('', true) }}"
+      no_log: true

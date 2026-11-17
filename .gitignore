@@ -9,5 +9,11 @@ coverage/
 # 認証情報はアプリ内で OS のキーチェーン経由で暗号化保存する。ファイルには置かない。
 .env
 .env.*
+!.env.example
 secret.json
 client_secret*.json
+
+# Ansible ローカル作業ファイル・Vault パスワードファイル
+.ansible/
+.vault_pass
+*.vault_pass

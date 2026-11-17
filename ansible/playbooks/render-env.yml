@@ -1,0 +1,25 @@
+---
+- name: Render .env.local from Ansible Vault secrets
+  hosts: local
+  gather_facts: false
+  vars:
+    repo_root: "{{ playbook_dir | dirname | dirname }}"
+    env_out: "{{ repo_root }}/.env.local"
+    secrets_file: "{{ inventory_dir }}/group_vars/all/secrets.yml"
+  tasks:
+    - name: Check secrets.yml exists in active inventory
+      ansible.builtin.stat:
+        path: "{{ secrets_file }}"
+      register: secrets_stat
+
+    - name: Fail if secrets.yml is missing
+      ansible.builtin.fail:
+        msg: "Secrets file not found: {{ secrets_file }} (copy secrets.yml.example and encrypt with ansible-vault)"
+      when: not secrets_stat.stat.exists
+
+    - name: Render .env.local
+      ansible.builtin.template:
+        src: "{{ repo_root }}/ansible/templates/env.local.j2"
+        dest: "{{ env_out }}"
+        mode: "0600"
+      no_log: true
