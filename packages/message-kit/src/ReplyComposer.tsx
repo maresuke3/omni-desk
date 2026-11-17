@@ -1,8 +1,8 @@
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { CircleAlert, CornerDownRight, SendHorizontal, X } from 'lucide-react'
 import type { Message, ReplyTarget, SendMessageInput } from '@omni-desk/contracts'
 import { actions, isMac, useComposer } from '@omni-desk/client'
-import { Button, cn, IconButton } from '@omni-desk/ui'
+import { Box, Button, IconButton, Paper, Stack, TextField, Typography } from '@omni-desk/ui'
 
 /** メッセージから返信先を作る（Chatwork は返信タグ、Slack はスレッドの指定に使う） */
 export function toReplyTarget(message: Message): ReplyTarget {
@@ -55,14 +55,6 @@ export function ReplyComposer({
   const sending = outbox?.status === 'sending'
   const [justSent, setJustSent] = useState(false)
 
-  // 内容に合わせて高さを伸ばす（最大 8 行程度）
-  useLayoutEffect(() => {
-    const el = ref.current
-    if (!el) return
-    el.style.height = 'auto'
-    el.style.height = `${Math.min(el.scrollHeight, 180)}px`
-  }, [text])
-
   useEffect(() => {
     if (autoFocus) ref.current?.focus()
   }, [autoFocus])
@@ -81,56 +73,95 @@ export function ReplyComposer({
   }
 
   return (
-    <div
-      className={cn(
-        'rounded-xl border bg-panel transition-colors focus-within:border-accent',
-        outbox?.status === 'failed' ? 'border-danger/40' : 'border-line',
-        variant === 'inline' && 'shadow-card'
-      )}
+    <Paper
+      variant="outlined"
+      sx={(theme) => ({
+        borderRadius: 1.5,
+        borderColor: outbox?.status === 'failed' ? theme.palette.error.main : theme.palette.divider,
+        boxShadow: variant === 'inline' ? '0 1px 2px rgba(16, 24, 40, 0.06)' : 'none',
+        '&:focus-within': {
+          borderColor: theme.palette.primary.main
+        }
+      })}
     >
       {header && (
-        <div className="flex items-center gap-1.5 border-b border-line px-3 py-1.5 text-[11.5px] text-fg-muted">
-          <CornerDownRight className="size-3.5 text-fg-subtle" />
-          <span className="min-w-0 flex-1 truncate">{header}</span>
+        <Stack
+          direction="row"
+          spacing={1}
+          sx={(theme) => ({
+            alignItems: 'center',
+            borderBottom: `1px solid ${theme.palette.divider}`,
+            px: 2,
+            py: 1
+          })}
+        >
+          <CornerDownRight size={16} />
+          <Typography
+            variant="caption"
+            color="text.secondary"
+            sx={{ minWidth: 0, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+          >
+            {header}
+          </Typography>
           {onCancel && (
-            <IconButton label="閉じる" onClick={onCancel} className="size-6">
-              <X className="size-3.5" />
+            <IconButton label="閉じる" onClick={onCancel}>
+              <X size={16} />
             </IconButton>
           )}
-        </div>
+        </Stack>
       )}
-      <textarea
-        ref={ref}
-        rows={1}
-        value={text}
-        disabled={sending}
-        placeholder={placeholder}
-        onChange={(e) => setText(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === 'Escape' && onCancel) onCancel()
-          if (e.key === 'Enter' && (e.metaKey || e.ctrlKey) && !e.nativeEvent.isComposing) {
-            e.preventDefault()
-            void submit()
-          }
-        }}
-        className="selectable block w-full resize-none bg-transparent px-3.5 py-2.5 text-[13px] leading-relaxed text-fg outline-none placeholder:text-fg-subtle disabled:opacity-60"
-      />
-      <div className="flex items-center gap-2 px-2.5 pb-2">
+      <Box sx={{ px: 2, pt: 1 }}>
+        <TextField
+          inputRef={ref}
+          multiline
+          minRows={1}
+          maxRows={6}
+          fullWidth
+          variant="standard"
+          value={text}
+          disabled={sending}
+          placeholder={placeholder}
+          onChange={(e) => setText(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Escape' && onCancel) onCancel()
+            if (e.key === 'Enter' && (e.metaKey || e.ctrlKey) && !e.nativeEvent.isComposing) {
+              e.preventDefault()
+              void submit()
+            }
+          }}
+          slotProps={{
+            input: {
+              disableUnderline: true,
+              sx: { fontSize: '16px', lineHeight: 1.5, py: 0.5 }
+            }
+          }}
+        />
+      </Box>
+      <Stack direction="row" spacing={1} sx={{ alignItems: 'center', px: 2, pb: 1, pt: 1 }}>
         {outbox?.status === 'failed' ? (
-          <span className="flex min-w-0 flex-1 items-center gap-1 text-[11.5px] text-danger">
-            <CircleAlert className="size-3.5 shrink-0" />
-            <span className="truncate">送信できませんでした：{outbox.error}</span>
-          </span>
+          <Stack direction="row" spacing={0.5} sx={{ minWidth: 0, flex: 1, alignItems: 'center', color: 'error.main' }}>
+            <CircleAlert size={16} />
+            <Typography
+              variant="caption"
+              sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+            >
+              送信できませんでした：{outbox.error}
+            </Typography>
+          </Stack>
         ) : justSent ? (
-          <span className="flex-1 text-[11.5px] text-success">送信しました</span>
+          <Typography variant="caption" color="success.main" sx={{ flex: 1 }}>
+            送信しました
+          </Typography>
         ) : (
-          <span className="flex-1 text-[11px] text-fg-subtle">{shortcutLabel()}</span>
+          <Typography variant="caption" color="text.disabled" sx={{ flex: 1 }}>
+            {shortcutLabel()}
+          </Typography>
         )}
         <Button size="sm" variant="primary" loading={sending} disabled={!text.trim()} onClick={() => void submit()}>
-          <SendHorizontal className="size-3.5" />
+          <SendHorizontal size={16} />
           {outbox?.status === 'failed' ? '再送信' : '送信'}
         </Button>
-      </div>
-    </div>
+      </Stack>
+    </Paper>
   )
 }

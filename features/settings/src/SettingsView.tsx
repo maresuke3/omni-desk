@@ -1,5 +1,20 @@
 import { useState, type ReactNode } from 'react'
-import { CalendarDays, ExternalLink, Eye, EyeOff, FileText, FolderGit2, Inbox, KeyRound, Monitor, Moon, Plus, ShieldCheck, Sun, Ticket, TriangleAlert } from 'lucide-react'
+import {
+  CalendarDays,
+  ExternalLink,
+  Eye,
+  EyeOff,
+  FileText,
+  FolderGit2,
+  Inbox,
+  KeyRound,
+  Monitor,
+  Moon,
+  Plus,
+  ShieldCheck,
+  Sun,
+  Ticket
+} from 'lucide-react'
 import {
   buildGitHubAuthorizeUrl,
   buildNotionAuthorizeUrl,
@@ -8,22 +23,67 @@ import {
   type OAuthConnectInput,
   type ThemePreference
 } from '@omni-desk/contracts'
-import { Avatar, Button, PageHeader, Segmented, SOURCE_LABEL, SourceMark } from '@omni-desk/ui'
-import { cn } from '@omni-desk/ui'
+import {
+  Alert,
+  Avatar,
+  Box,
+  Button,
+  Card as UiCard,
+  Chip,
+  Divider,
+  IconButton,
+  InputAdornment,
+  ListItemButton,
+  MenuItem,
+  PageHeader,
+  Paper,
+  Segmented,
+  SOURCE_LABEL,
+  SourceMark,
+  Stack,
+  Switch,
+  TextField,
+  Typography
+} from '@omni-desk/ui'
 import { actions, openExternal, useAsyncAction, useRateStatus, useSettings } from '@omni-desk/client'
 
-function Card({ title, icon, description, children }: { title: string; icon: ReactNode; description?: ReactNode; children: ReactNode }) {
+function SectionCard({
+  title,
+  icon,
+  description,
+  children
+}: {
+  title: string
+  icon: ReactNode
+  description?: ReactNode
+  children: ReactNode
+}) {
   return (
-    <section className="card overflow-hidden">
-      <div className="flex items-start gap-3 border-b border-line px-5 py-4">
+    <UiCard sx={{ overflow: 'hidden' }}>
+      <Stack
+        direction="row"
+        spacing={2}
+        sx={(theme) => ({
+          alignItems: 'flex-start',
+          borderBottom: `1px solid ${theme.palette.divider}`,
+          px: 3,
+          py: 2
+        })}
+      >
         {icon}
-        <div>
-          <h2 className="text-[14px] font-semibold">{title}</h2>
-          {description && <p className="mt-0.5 text-[12.5px] text-fg-muted">{description}</p>}
-        </div>
-      </div>
-      <div className="px-5 py-4">{children}</div>
-    </section>
+        <Box>
+          <Typography variant="body1" sx={{ fontWeight: 600 }}>
+            {title}
+          </Typography>
+          {description && (
+            <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+              {description}
+            </Typography>
+          )}
+        </Box>
+      </Stack>
+      <Box sx={{ px: 3, py: 2 }}>{children}</Box>
+    </UiCard>
   )
 }
 
@@ -44,27 +104,35 @@ function SecretInput({
 }) {
   const [visible, setVisible] = useState(false)
   return (
-    <label className="block">
-      <span className="mb-1.5 block text-[12.5px] font-medium">{label}</span>
-      <span className="flex h-9 items-center gap-2 rounded-lg border border-line bg-sunken px-3 focus-within:border-accent focus-within:bg-panel">
-        <KeyRound className="size-3.5 shrink-0 text-fg-subtle" />
-        <input
-          type={!secret || visible ? 'text' : 'password'}
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          placeholder={placeholder}
-          autoComplete="off"
-          spellCheck={false}
-          className="selectable w-full bg-transparent font-mono text-[12.5px] outline-none placeholder:font-sans placeholder:text-fg-subtle"
-        />
-        {secret && (
-          <button type="button" onClick={() => setVisible((v) => !v)} className="text-fg-subtle hover:text-fg" title={visible ? '隠す' : '表示'}>
-            {visible ? <EyeOff className="size-3.5" /> : <Eye className="size-3.5" />}
-          </button>
-        )}
-      </span>
-      {hint && <span className="mt-1.5 block text-[11.5px] leading-relaxed text-fg-subtle">{hint}</span>}
-    </label>
+    <TextField
+      fullWidth
+      label={label}
+      type={!secret || visible ? 'text' : 'password'}
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      placeholder={placeholder}
+      helperText={hint}
+      slotProps={{
+        htmlInput: {
+          autoComplete: 'off',
+          spellCheck: false
+        },
+        input: {
+          startAdornment: (
+            <InputAdornment position="start">
+              <KeyRound size={16} />
+            </InputAdornment>
+          ),
+          endAdornment: secret ? (
+            <InputAdornment position="end">
+              <IconButton label={visible ? '隠す' : '表示'} onClick={() => setVisible((v) => !v)}>
+                {visible ? <EyeOff size={16} /> : <Eye size={16} />}
+              </IconButton>
+            </InputAdornment>
+          ) : undefined
+        }
+      }}
+    />
   )
 }
 
@@ -82,32 +150,41 @@ function ConnectedRow({
   pending: boolean
 }) {
   return (
-    <div className="flex items-center gap-3">
-      <Avatar name={name} url={avatarUrl} size={36} />
-      <div className="min-w-0 flex-1">
-        <p className="flex items-center gap-1.5 font-medium">
-          {name}
-          <span className="inline-flex items-center gap-1 rounded-full bg-success-soft px-2 py-px text-[11px] font-medium text-success">
-            <ShieldCheck className="size-3" />
-            接続済み
-          </span>
-        </p>
-        <p className="truncate text-[12px] text-fg-muted">{detail}</p>
-      </div>
+    <Stack direction="row" spacing={2} sx={{ alignItems: 'center' }}>
+      <Avatar name={name} url={avatarUrl} size={32} />
+      <Box sx={{ minWidth: 0, flex: 1 }}>
+        <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+          <Typography variant="body1" sx={{ fontWeight: 500 }}>
+            {name}
+          </Typography>
+          <Chip size="small" color="success" variant="outlined" icon={<ShieldCheck size={12} />} label="接続済み" />
+        </Stack>
+        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {detail}
+        </Typography>
+      </Box>
       <Button variant="danger" size="sm" onClick={onDisconnect} loading={pending}>
         接続を解除
       </Button>
-    </div>
+    </Stack>
   )
 }
 
 function ErrorText({ error }: { error: Error | null }) {
   if (!error) return null
-  return <p className="mt-3 rounded-md bg-danger-soft px-3 py-2 text-[12.5px] text-danger">{error.message}</p>
+  return (
+    <Alert severity="error" sx={{ mt: 2 }}>
+      {error.message}
+    </Alert>
+  )
 }
 
 function Steps({ children }: { children: ReactNode }) {
-  return <ol className="list-decimal space-y-1 pl-5 text-[12.5px] leading-relaxed text-fg-muted marker:text-fg-subtle">{children}</ol>
+  return (
+    <Box component="ol" sx={{ m: 0, pl: 3, display: 'flex', flexDirection: 'column', gap: 0.5, fontSize: '12px', color: 'text.secondary' }}>
+      {children}
+    </Box>
+  )
 }
 
 type SlackMode = 'user' | 'oauth' | 'session'
@@ -138,9 +215,9 @@ function OAuthFields({
   }
 
   return (
-    <>
+    <Stack spacing={2}>
       <Steps>{steps}</Steps>
-      <div className="grid gap-3 sm:grid-cols-2">
+      <Box sx={{ display: 'grid', gap: 2, gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' } }}>
         <SecretInput
           label="Client ID"
           value={value.clientId}
@@ -154,7 +231,7 @@ function OAuthFields({
           onChange={(clientSecret) => onChange({ ...value, clientSecret })}
           placeholder="Client Secret"
         />
-      </div>
+      </Box>
       <SecretInput
         label={requireHttps ? 'Redirect URL（https:// 必須）' : 'Redirect URL'}
         value={value.redirectUri}
@@ -162,12 +239,12 @@ function OAuthFields({
         placeholder={redirectPlaceholder}
         secret={false}
       />
-      <div>
+      <Box>
         <Button type="button" size="sm" disabled={!value.clientId.trim() || !validRedirect} onClick={openAuthorize}>
-          <ExternalLink className="size-3.5" />
+          <ExternalLink size={16} />
           ブラウザで認可ページを開く
         </Button>
-      </div>
+      </Box>
       <SecretInput
         label="リダイレクト URL または認可コード"
         value={value.codeOrUrl}
@@ -175,7 +252,7 @@ function OAuthFields({
         placeholder={`${redirectPlaceholder}?code=...`}
         hint="認可後に表示されたアドレスバーの URL 全体をそのまま貼り付けられます（Client ID / Secret は保存されません）。"
       />
-    </>
+    </Stack>
   )
 }
 
@@ -183,7 +260,6 @@ const EMPTY_OAUTH: OAuthConnectInput = { clientId: '', clientSecret: '', redirec
 
 function SlackSettings() {
   const settings = useSettings()
-  // 入力中のトークンは画面ローカルに持ち、ストアやディスクには置かない
   const connect = useAsyncAction(actions.connectSlack)
   const connectOAuth = useAsyncAction(actions.connectSlackOAuth)
   const disconnect = useAsyncAction(actions.disconnectSlack)
@@ -204,16 +280,16 @@ function SlackSettings() {
       : Boolean(token.trim() && (mode !== 'session' || cookie.trim()))
 
   return (
-    <Card
+    <SectionCard
       title="Slack"
       icon={<SourceMark source="slack" size="md" />}
       description="複数ワークスペースのメンション・チャンネル・DM・To-dos を集約して表示します"
     >
-      <div className="space-y-4">
+      <Stack spacing={2}>
         {workspaces.length > 0 && (
-          <div className="divide-y divide-line">
+          <Stack divider={<Divider />} spacing={2}>
             {workspaces.map((conn) => (
-              <div key={`${conn.teamUrl}:${conn.userId}`} className="py-2.5 first:pt-0 last:pb-0">
+              <Box key={`${conn.teamUrl}:${conn.userId}`}>
                 <ConnectedRow
                   name={conn.teamName}
                   detail={`${conn.userName} · ${conn.authType === 'session' ? 'ブラウザセッション（To-dos 対応）' : 'ユーザートークン（To-dos 非対応）'}`}
@@ -223,24 +299,29 @@ function SlackSettings() {
                   }}
                   pending={disconnect.pending && disconnectingUrl === conn.teamUrl}
                 />
-              </div>
+              </Box>
             ))}
-          </div>
+          </Stack>
         )}
 
         {workspaces.length > 0 && !adding && (
-          <div>
+          <Box>
             <Button size="sm" onClick={() => setAdding(true)}>
-              <Plus className="size-3.5" />
+              <Plus size={16} />
               ワークスペースを追加
             </Button>
-          </div>
+          </Box>
         )}
 
         {showForm && (
-          <form
-            className="space-y-4 border-t border-line pt-4 first:border-t-0 first:pt-0"
-            onSubmit={(e) => {
+          <Stack
+            component="form"
+            spacing={2}
+            sx={(theme) => ({
+              borderTop: workspaces.length > 0 ? `1px solid ${theme.palette.divider}` : 'none',
+              pt: workspaces.length > 0 ? 2 : 0
+            })}
+            onSubmit={(e: React.FormEvent) => {
               e.preventDefault()
               if (mode === 'oauth') {
                 void connectOAuth.run(oauth).then((ok) => {
@@ -260,7 +341,7 @@ function SlackSettings() {
               })
             }}
           >
-            <div className="flex flex-wrap items-center justify-between gap-2">
+            <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between' }}>
               <Segmented
                 value={mode}
                 onChange={setMode}
@@ -271,35 +352,33 @@ function SlackSettings() {
                 ]}
               />
               {workspaces.length > 0 && (
-                <button type="button" onClick={() => setAdding(false)} className="text-[12px] text-fg-subtle hover:text-fg">
+                <Button size="sm" variant="ghost" onClick={() => setAdding(false)}>
                   キャンセル
-                </button>
+                </Button>
               )}
-            </div>
+            </Stack>
 
             {mode === 'user' ? (
-              <>
+              <Stack spacing={2}>
                 <Steps>
                   <li>
-                    <a className="text-accent-text hover:underline" href="#" onClick={(e) => (e.preventDefault(), openExternal('https://api.slack.com/apps'))}>
+                    <a href="#" onClick={(e) => (e.preventDefault(), openExternal('https://api.slack.com/apps'))}>
                       api.slack.com/apps
                     </a>{' '}
-                    で「From a manifest」を選び、リポジトリの <code className="rounded bg-sunken px-1">docs/slack-app-manifest.yml</code> を貼り付けてアプリを作成
+                    で「From a manifest」を選び、リポジトリの <code>docs/slack-app-manifest.yml</code> を貼り付けてアプリを作成
                   </li>
                   <li>ワークスペースにインストールし、「User OAuth Token（xoxp-…）」をコピー</li>
                 </Steps>
-                <div className="flex flex-wrap gap-1">
+                <Stack direction="row" spacing={0.5} sx={{ flexWrap: 'wrap', rowGap: 0.5 }}>
                   {SLACK_USER_SCOPES.map((s) => (
-                    <span key={s} className="rounded bg-sunken px-1.5 py-0.5 font-mono text-[11px] text-fg-muted">
-                      {s}
-                    </span>
+                    <Chip key={s} size="small" label={s} />
                   ))}
-                </div>
+                </Stack>
                 <SecretInput label="User OAuth Token" value={token} onChange={setToken} placeholder="xoxp-..." />
-                <p className="text-[11.5px] text-fg-subtle">
+                <Typography variant="caption" color="text.disabled">
                   ※ Slack の To-dos は公開 API が無いため、この方式では表示できません。社内でアプリのインストールに管理者承認が必要な場合があります。
-                </p>
-              </>
+                </Typography>
+              </Stack>
             ) : mode === 'oauth' ? (
               <OAuthFields
                 value={oauth}
@@ -310,53 +389,51 @@ function SlackSettings() {
                 steps={
                   <>
                     <li>
-                      <a className="text-accent-text hover:underline" href="#" onClick={(e) => (e.preventDefault(), openExternal('https://api.slack.com/apps'))}>
+                      <a href="#" onClick={(e) => (e.preventDefault(), openExternal('https://api.slack.com/apps'))}>
                         api.slack.com/apps
                       </a>{' '}
-                      でアプリを作成し、「OAuth &amp; Permissions → Redirect URLs」に HTTPS の URL（例: ngrok URL やダミー HTTPS URL）を登録
+                      でアプリを作成し、「OAuth &amp; Permissions → Redirect URLs」に HTTPS の URL を登録
                     </li>
                     <li>Client ID / Client Secret / Redirect URL を入力し、「ブラウザで認可ページを開く」からワークスペースを認可</li>
-                    <li>リダイレクト先の URL 全体（または <code className="rounded bg-sunken px-1">code</code> の値）を下に貼り付けて保存</li>
+                    <li>リダイレクト先の URL 全体（または <code>code</code> の値）を下に貼り付けて保存</li>
                   </>
                 }
               />
             ) : (
-              <>
-                <div className="flex gap-2.5 rounded-lg border border-warning/30 bg-warning-soft px-3.5 py-3 text-[12.5px] leading-relaxed">
-                  <TriangleAlert className="mt-0.5 size-4 shrink-0 text-warning" />
-                  <p className="text-fg">
-                    Slack Web クライアントと同じ認証情報（非公式な方法）を使います。To-dos と未読状態が取得できますが、
-                    Slack 側の変更で動かなくなる可能性があります。<b>利用前に社内のセキュリティポリシーを確認してください。</b>
-                    ログアウトすると無効になります。
-                  </p>
-                </div>
+              <Stack spacing={2}>
+                <Alert severity="warning">
+                  Slack Web クライアントと同じ認証情報（非公式な方法）を使います。To-dos と未読状態が取得できますが、
+                  Slack 側の変更で動かなくなる可能性があります。<strong>利用前に社内のセキュリティポリシーを確認してください。</strong>
+                  ログアウトすると無効になります。
+                </Alert>
                 <Steps>
                   <li>ブラウザで Slack ワークスペース（app.slack.com）を開き、開発者ツールを開く</li>
                   <li>
-                    Application → Cookies → <code className="rounded bg-sunken px-1">https://app.slack.com</code> の{' '}
-                    <code className="rounded bg-sunken px-1">d</code> の値（xoxd-…）をコピー
+                    Application → Cookies → <code>https://app.slack.com</code> の <code>d</code> の値（xoxd-…）をコピー
                   </li>
                   <li>
-                    Console で <code className="rounded bg-sunken px-1">Object.values(JSON.parse(localStorage.localConfig_v2).teams).map(t =&gt; [t.name, t.token])</code>{' '}
+                    Console で <code>Object.values(JSON.parse(localStorage.localConfig_v2).teams).map(t =&gt; [t.name, t.token])</code>{' '}
                     を実行し、対象ワークスペースの xoxc-… をコピー
                   </li>
                 </Steps>
                 <SecretInput label="セッショントークン" value={token} onChange={setToken} placeholder="xoxc-..." />
                 <SecretInput label="d Cookie" value={cookie} onChange={setCookie} placeholder="xoxd-..." />
-              </>
+              </Stack>
             )}
 
-            <div className="flex items-center gap-3">
+            <Stack direction="row" spacing={2} sx={{ alignItems: 'center' }}>
               <Button type="submit" variant="primary" loading={activePending} disabled={!canSubmit}>
                 接続をテストして保存
               </Button>
-              <span className="text-[11.5px] text-fg-subtle">トークンは OS のキーチェーンで暗号化して保存されます</span>
-            </div>
+              <Typography variant="caption" color="text.disabled">
+                トークンは OS のキーチェーンで暗号化して保存されます
+              </Typography>
+            </Stack>
             <ErrorText error={activeError} />
-          </form>
+          </Stack>
         )}
-      </div>
-    </Card>
+      </Stack>
+    </SectionCard>
   )
 }
 
@@ -369,7 +446,7 @@ function ChatworkSettings() {
   const conn = settings.chatwork
 
   return (
-    <Card
+    <SectionCard
       title="Chatwork"
       icon={<SourceMark source="chatwork" size="md" />}
       description="チャット・自分宛てメッセージ・マイタスクを表示します"
@@ -381,21 +458,17 @@ function ChatworkSettings() {
           detail={
             <>
               {conn.organizationName ?? `アカウント ID: ${conn.accountId}`}
-              {rate && (
-                <span className="text-fg-subtle">
-                  {' '}
-                  · API 残り {rate.remaining} / {rate.limit} 回（5 分）{rate.queued > 0 && ` · 待機中 ${rate.queued} 件`}
-                </span>
-              )}
+              {rate && ` · API 残り ${rate.remaining} / ${rate.limit} 回（5 分）${rate.queued > 0 ? ` · 待機中 ${rate.queued} 件` : ''}`}
             </>
           }
           onDisconnect={() => void disconnect.run()}
           pending={disconnect.pending}
         />
       ) : (
-        <form
-          className="space-y-4"
-          onSubmit={(e) => {
+        <Stack
+          component="form"
+          spacing={2}
+          onSubmit={(e: React.FormEvent) => {
             e.preventDefault()
             void connect.run({ token }).then((ok) => ok && setToken(''))
           }}
@@ -404,7 +477,6 @@ function ChatworkSettings() {
             <li>
               Chatwork の「サービス連携」→「
               <a
-                className="text-accent-text hover:underline"
                 href="#"
                 onClick={(e) => (e.preventDefault(), openExternal('https://www.chatwork.com/service/packages/chatwork/subpackages/api/token.php'))}
               >
@@ -414,51 +486,36 @@ function ChatworkSettings() {
             </li>
           </Steps>
           <SecretInput label="API トークン" value={token} onChange={setToken} placeholder="API トークンを貼り付け" />
-          <div className="flex items-center gap-3">
+          <Stack direction="row" spacing={2} sx={{ alignItems: 'center' }}>
             <Button type="submit" variant="primary" loading={connect.pending} disabled={!token.trim()}>
               接続をテストして保存
             </Button>
-            <span className="text-[11.5px] text-fg-subtle">API の上限は 5 分あたり 300 回です（アプリ内で予算を管理します）</span>
-          </div>
+            <Typography variant="caption" color="text.disabled">
+              API の上限は 5 分あたり 300 回です（アプリ内で予算を管理します）
+            </Typography>
+          </Stack>
           <ErrorText error={connect.error} />
-        </form>
+        </Stack>
       )}
-    </Card>
+    </SectionCard>
   )
 }
 
 function Row({ label, description, children }: { label: string; description?: string; children: ReactNode }) {
   return (
-    <div className="flex items-center justify-between gap-6 py-3 first:pt-0 last:pb-0">
-      <div>
-        <p className="text-[13px] font-medium">{label}</p>
-        {description && <p className="text-[12px] text-fg-muted">{description}</p>}
-      </div>
-      {children}
-    </div>
-  )
-}
-
-function Toggle({ checked, onChange, disabled }: { checked: boolean; onChange: (v: boolean) => void; disabled?: boolean }) {
-  return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={checked}
-      disabled={disabled}
-      onClick={() => onChange(!checked)}
-      className={cn(
-        'relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full transition-colors focus-visible:outline-2 focus-visible:outline-accent disabled:cursor-not-allowed disabled:opacity-50',
-        checked ? 'bg-accent' : 'bg-line-strong'
-      )}
-    >
-      <span
-        className={cn(
-          'pointer-events-none absolute top-0.5 left-0.5 size-4 rounded-full bg-white shadow transition-transform',
-          checked ? 'translate-x-4' : 'translate-x-0'
+    <Stack direction="row" spacing={3} sx={{ alignItems: 'center', justifyContent: 'space-between', py: 2 }}>
+      <Box>
+        <Typography variant="body1" sx={{ fontWeight: 500 }}>
+          {label}
+        </Typography>
+        {description && (
+          <Typography variant="caption" color="text.secondary">
+            {description}
+          </Typography>
         )}
-      />
-    </button>
+      </Box>
+      {children}
+    </Stack>
   )
 }
 
@@ -468,17 +525,17 @@ function DisplaySettings() {
   const noneConnected = !settings.slack && !settings.chatwork
 
   return (
-    <Card title="表示と同期" icon={<span className="flex size-7 items-center justify-center rounded-lg bg-sunken"><Monitor className="size-4 text-fg-muted" /></span>}>
-      <div className="divide-y divide-line">
+    <SectionCard title="表示と同期" icon={<Monitor size={16} />}>
+      <Stack divider={<Divider />}>
         <Row label="テーマ">
           <Segmented<ThemePreference>
             size="sm"
             value={settings.theme}
             onChange={(theme) => void update.run({ theme })}
             options={[
-              { value: 'system', label: <><Monitor className="size-3.5" />自動</> },
-              { value: 'light', label: <><Sun className="size-3.5" />ライト</> },
-              { value: 'dark', label: <><Moon className="size-3.5" />ダーク</> }
+              { value: 'system', label: <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}><Monitor size={16} /><span>自動</span></Stack> },
+              { value: 'light', label: <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}><Sun size={16} /><span>ライト</span></Stack> },
+              { value: 'dark', label: <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}><Moon size={16} /><span>ダーク</span></Stack> }
             ]}
           />
         </Row>
@@ -486,29 +543,31 @@ function DisplaySettings() {
           label="Slack の自動更新の間隔"
           description="短くすると API の利用回数が増えます。Chatwork は変化を検知して自動で取得します"
         >
-          <select
+          <TextField
+            select
+            size="small"
             value={settings.refreshIntervalSec}
             onChange={(e) => void update.run({ refreshIntervalSec: Number(e.target.value) })}
-            className="h-8 rounded-lg border border-line bg-panel px-2 text-[13px] outline-none focus:border-accent"
+            sx={{ minWidth: 104 }}
           >
-            <option value={60}>1 分</option>
-            <option value={120}>2 分</option>
-            <option value={300}>5 分</option>
-            <option value={600}>10 分</option>
-          </select>
+            <MenuItem value={60}>1 分</MenuItem>
+            <MenuItem value={120}>2 分</MenuItem>
+            <MenuItem value={300}>5 分</MenuItem>
+            <MenuItem value={600}>10 分</MenuItem>
+          </TextField>
         </Row>
         <Row
           label="デモデータを表示"
           description={noneConnected ? 'サービス未接続のあいだは自動でデモデータを表示しています' : '接続中のデータの代わりにサンプルを表示します'}
         >
-          <Toggle
+          <Switch
             checked={settings.demoActive}
             disabled={noneConnected}
-            onChange={(demoMode) => void update.run({ demoMode })}
+            onChange={(_, checked) => void update.run({ demoMode: checked })}
           />
         </Row>
-      </div>
-    </Card>
+      </Stack>
+    </SectionCard>
   )
 }
 
@@ -516,57 +575,57 @@ function InboxSettings() {
   const settings = useSettings()
   const update = useAsyncAction(actions.updateSettings)
   return (
-    <Card
+    <SectionCard
       title="受信箱"
-      icon={<span className="flex size-7 items-center justify-center rounded-lg bg-sunken"><Inbox className="size-4 text-fg-muted" /></span>}
+      icon={<Inbox size={16} />}
       description="対応状況（未対応・あとで・対応済み）はこの PC に保存されます"
     >
-      <div className="divide-y divide-line">
-        <Row
-          label="対応済みにしたら、サービス側も既読にする"
-          description="Chatwork はルーム単位の既読化のため、そのメッセージより前の未読もまとめて既読になります。Slack をユーザートークン方式で使う場合は、Slack アプリに channels:write・groups:write・im:write・mpim:write の権限が必要です"
-        >
-          <Toggle checked={settings.markReadOnDone} onChange={(markReadOnDone) => void update.run({ markReadOnDone })} />
-        </Row>
-      </div>
+      <Row
+        label="対応済みにしたら、サービス側も既読にする"
+        description="Chatwork はルーム単位の既読化のため、そのメッセージより前の未読もまとめて既読になります。Slack をユーザートークン方式で使う場合は、Slack アプリに channels:write・groups:write・im:write・mpim:write の権限が必要です"
+      >
+        <Switch
+          checked={settings.markReadOnDone}
+          onChange={(_, checked) => void update.run({ markReadOnDone: checked })}
+        />
+      </Row>
       <ErrorText error={update.error} />
-    </Card>
+    </SectionCard>
   )
 }
 
 function BlockedSendersSettings() {
   const settings = useSettings()
   const unblock = useAsyncAction(actions.unblockSender)
-  // どの行を解除中か（ボタンの読み込み表示用）
   const [unblocking, setUnblocking] = useState<string | null>(null)
   const list = settings.blockedSenders ?? []
 
   return (
-    <Card
+    <SectionCard
       title="非表示にする送信者"
-      icon={<span className="flex size-7 items-center justify-center rounded-lg bg-sunken"><EyeOff className="size-4 text-fg-muted" /></span>}
+      icon={<EyeOff size={16} />}
       description="受信箱・ホームの「あなた宛て」・サイドバーの件数に含めない送信者です。会話画面では通常どおり表示されます"
     >
       {list.length === 0 ? (
-        <p className="text-[12.5px] leading-relaxed text-fg-muted">
-          非表示にしている送信者はいません。受信箱のメッセージにカーソルを合わせ、
-          <EyeOff className="mx-0.5 inline size-3.5 align-[-2px]" />
-          「この送信者を受信箱で非表示」を押すとここに追加されます。
-        </p>
+        <Typography variant="body2" color="text.secondary">
+          非表示にしている送信者はいません。受信箱のメッセージにカーソルを合わせ、「この送信者を受信箱で非表示」を押すとここに追加されます。
+        </Typography>
       ) : (
-        <ul className="divide-y divide-line">
+        <Stack divider={<Divider />} spacing={2}>
           {list.map((s) => {
             const rowKey = `${s.source}:${s.senderId}`
             const pending = unblock.pending && unblocking === rowKey
             return (
-              <li key={`${s.source}:${s.senderId}`} className="flex items-center gap-3 py-2.5 first:pt-0 last:pb-0">
+              <Stack key={rowKey} direction="row" spacing={2} sx={{ alignItems: 'center' }}>
                 <SourceMark source={s.source} size="md" />
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-[13px] font-medium">{s.name}</p>
-                  <p className="truncate text-[11.5px] text-fg-subtle">
+                <Box sx={{ minWidth: 0, flex: 1 }}>
+                  <Typography variant="body1" sx={{ fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {s.name}
+                  </Typography>
+                  <Typography variant="caption" color="text.disabled">
                     {SOURCE_LABEL[s.source]} · ID: {s.senderId}
-                  </p>
-                </div>
+                  </Typography>
+                </Box>
                 <Button
                   size="sm"
                   onClick={() => {
@@ -577,13 +636,13 @@ function BlockedSendersSettings() {
                 >
                   解除
                 </Button>
-              </li>
+              </Stack>
             )
           })}
-        </ul>
+        </Stack>
       )}
       <ErrorText error={unblock.error} />
-    </Card>
+    </SectionCard>
   )
 }
 
@@ -609,18 +668,18 @@ function GitHubSettings() {
       : Boolean(token.trim())
 
   return (
-    <Card
+    <SectionCard
       title="GitHub"
-      icon={<FolderGit2 className="size-5 text-fg-muted" />}
+      icon={<FolderGit2 size={16} />}
       description="個人用・会社用など複数のトークンを登録でき、PR・Issue・Organization リポジトリを集約します"
     >
-      <div className="space-y-4">
+      <Stack spacing={2}>
         {accounts.length > 0 && (
-          <div className="divide-y divide-line">
+          <Stack divider={<Divider />} spacing={2}>
             {accounts.map((conn, idx) => {
               const accountId = conn.id ?? conn.login
               return (
-                <div key={`${accountId}:${idx}`} className="py-2.5 first:pt-0 last:pb-0">
+                <Box key={`${accountId}:${idx}`}>
                   <ConnectedRow
                     name={conn.label ? `${conn.name}（${conn.label}）` : conn.name}
                     detail={`@${conn.login}`}
@@ -631,25 +690,30 @@ function GitHubSettings() {
                     }}
                     pending={disconnect.pending && disconnectingId === accountId}
                   />
-                </div>
+                </Box>
               )
             })}
-          </div>
+          </Stack>
         )}
 
         {accounts.length > 0 && !adding && (
-          <div>
+          <Box>
             <Button size="sm" onClick={() => setAdding(true)}>
-              <Plus className="size-3.5" />
+              <Plus size={16} />
               トークン / アカウントを追加
             </Button>
-          </div>
+          </Box>
         )}
 
         {showForm && (
-          <form
-            className="space-y-4 border-t border-line pt-4 first:border-t-0 first:pt-0"
-            onSubmit={(e) => {
+          <Stack
+            component="form"
+            spacing={2}
+            sx={(theme) => ({
+              borderTop: accounts.length > 0 ? `1px solid ${theme.palette.divider}` : 'none',
+              pt: accounts.length > 0 ? 2 : 0
+            })}
+            onSubmit={(e: React.FormEvent) => {
               e.preventDefault()
               if (mode === 'oauth') {
                 void connectOAuth.run(oauth).then((ok) => {
@@ -678,14 +742,8 @@ function GitHubSettings() {
               ]}
             />
             {mode === 'token' ? (
-              <div className="space-y-3">
-                <SecretInput
-                  label="ラベル（任意）"
-                  value={label}
-                  onChange={setLabel}
-                  placeholder="例: 個人用 / 会社用"
-                  secret={false}
-                />
+              <Stack spacing={2}>
+                <SecretInput label="ラベル（任意）" value={label} onChange={setLabel} placeholder="例: 個人用 / 会社用" secret={false} />
                 <SecretInput
                   label="Personal Access Token"
                   value={token}
@@ -693,7 +751,7 @@ function GitHubSettings() {
                   placeholder="ghp_... / github_pat_..."
                   hint="repo / read:user スコープを持つトークンを入力してください（Organization 用トークンも追加できます）。"
                 />
-              </div>
+              </Stack>
             ) : (
               <OAuthFields
                 value={oauth}
@@ -705,12 +763,12 @@ function GitHubSettings() {
                   <>
                     <li>GitHub の Developer Settings → OAuth Apps でアプリを作成し、Authorization callback URL を登録</li>
                     <li>Client ID / Client Secret / Redirect URL を入力し、「ブラウザで認可ページを開く」から認可</li>
-                    <li>リダイレクト先の URL 全体（または <code className="rounded bg-sunken px-1">code</code>）を貼り付けて保存</li>
+                    <li>リダイレクト先の URL 全体（または <code>code</code>）を貼り付けて保存</li>
                   </>
                 }
               />
             )}
-            <div className="flex items-center gap-3">
+            <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
               <Button type="submit" variant="primary" loading={activePending} disabled={!canSubmit}>
                 接続をテストして保存
               </Button>
@@ -719,12 +777,12 @@ function GitHubSettings() {
                   キャンセル
                 </Button>
               )}
-            </div>
+            </Stack>
             <ErrorText error={activeError} />
-          </form>
+          </Stack>
         )}
-      </div>
-    </Card>
+      </Stack>
+    </SectionCard>
   )
 }
 
@@ -737,9 +795,9 @@ function AtlassianSettings() {
   const conn = settings.atlassian
 
   return (
-    <Card
+    <SectionCard
       title="Atlassian CLI（Jira / Confluence）"
-      icon={<Ticket className="size-5 text-fg-muted" />}
+      icon={<Ticket size={16} />}
       description="acli を通じて Jira チケットの検索・作成・編集・コメントや Confluence 資料を取得します"
     >
       {conn ? (
@@ -750,14 +808,15 @@ function AtlassianSettings() {
           pending={disconnect.pending}
         />
       ) : (
-        <form
-          className="space-y-4"
-          onSubmit={(e) => {
+        <Stack
+          component="form"
+          spacing={2}
+          onSubmit={(e: React.FormEvent) => {
             e.preventDefault()
             void connect.run({ binaryPath, siteUrl: siteUrl.trim() || undefined })
           }}
         >
-          <div className="grid gap-3 sm:grid-cols-2">
+          <Box sx={{ display: 'grid', gap: 2, gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' } }}>
             <SecretInput label="acli バイナリパス" value={binaryPath} onChange={setBinaryPath} placeholder="acli" secret={false} />
             <SecretInput
               label="Atlassian サイト URL（任意）"
@@ -766,16 +825,16 @@ function AtlassianSettings() {
               placeholder="https://your-domain.atlassian.net"
               secret={false}
             />
-          </div>
-          <div className="flex items-center gap-3">
+          </Box>
+          <Box>
             <Button type="submit" variant="primary" loading={connect.pending} disabled={!binaryPath.trim()}>
               acli の接続を確認して保存
             </Button>
-          </div>
+          </Box>
           <ErrorText error={connect.error} />
-        </form>
+        </Stack>
       )}
-    </Card>
+    </SectionCard>
   )
 }
 
@@ -797,9 +856,9 @@ function NotionSettings() {
       : Boolean(token.trim())
 
   return (
-    <Card
+    <SectionCard
       title="Notion"
-      icon={<FileText className="size-5 text-fg-muted" />}
+      icon={<FileText size={16} />}
       description="ワークスペース内の共有ページ・データベースをナレッジボードに表示します"
     >
       {conn ? (
@@ -811,9 +870,10 @@ function NotionSettings() {
           pending={disconnect.pending}
         />
       ) : (
-        <form
-          className="space-y-4"
-          onSubmit={(e) => {
+        <Stack
+          component="form"
+          spacing={2}
+          onSubmit={(e: React.FormEvent) => {
             e.preventDefault()
             if (mode === 'oauth') {
               void connectOAuth.run(oauth).then((ok) => {
@@ -853,20 +913,20 @@ function NotionSettings() {
                 <>
                   <li>Notion Integrations で Public Integration を作成し、Redirect URI（https://）を登録</li>
                   <li>OAuth Client ID / Client Secret / Redirect URL を入力し、「ブラウザで認可ページを開く」から対象ページを許可</li>
-                  <li>リダイレクト先の URL 全体（または <code className="rounded bg-sunken px-1">code</code>）を貼り付けて保存</li>
+                  <li>リダイレクト先の URL 全体（または <code>code</code>）を貼り付けて保存</li>
                 </>
               }
             />
           )}
-          <div className="flex items-center gap-3">
+          <Box>
             <Button type="submit" variant="primary" loading={activePending} disabled={!canSubmit}>
               接続をテストして保存
             </Button>
-          </div>
+          </Box>
           <ErrorText error={activeError} />
-        </form>
+        </Stack>
       )}
-    </Card>
+    </SectionCard>
   )
 }
 
@@ -890,16 +950,16 @@ function GoogleSettings() {
   const showForm = accounts.length === 0 || adding
 
   return (
-    <Card
+    <SectionCard
       title="Google 連携"
-      icon={<CalendarDays className="size-5 text-fg-muted" />}
+      icon={<CalendarDays size={16} />}
       description="連携対象: Google Calendar・Gmail（今後 Google サービスを順次追加予定）。複数アカウントをまとめて連携できます"
     >
-      <div className="space-y-4">
+      <Stack spacing={2}>
         {accounts.length > 0 && (
-          <div className="divide-y divide-line">
+          <Stack divider={<Divider />} spacing={2}>
             {accounts.map((acc) => (
-              <div key={acc.id} className="py-2.5 first:pt-0 last:pb-0">
+              <Box key={acc.id}>
                 <ConnectedRow
                   name={acc.label ? `${acc.name || acc.email}（${acc.label}）` : acc.name || acc.email}
                   detail={`${acc.email} · Calendar / Gmail`}
@@ -910,44 +970,53 @@ function GoogleSettings() {
                   }}
                   pending={disconnect.pending && disconnectingId === acc.id}
                 />
-              </div>
+              </Box>
             ))}
-          </div>
+          </Stack>
         )}
 
         {accounts.length > 0 && !adding && (
-          <div>
+          <Box>
             <Button size="sm" onClick={() => setAdding(true)}>
-              <Plus className="size-3.5" />
+              <Plus size={16} />
               Google アカウントを追加
             </Button>
-          </div>
+          </Box>
         )}
 
         {showForm && (
-          <div className="space-y-4 border-t border-line pt-4 first:border-t-0 first:pt-0">
-            <p className="text-[12.5px] leading-relaxed text-fg-muted">
+          <Stack
+            spacing={2}
+            sx={(theme) => ({
+              borderTop: accounts.length > 0 ? `1px solid ${theme.palette.divider}` : 'none',
+              pt: accounts.length > 0 ? 2 : 0
+            })}
+          >
+            <Typography variant="body2" color="text.secondary">
               ボタンを押すとブラウザで Google の認証画面が開き、許可するだけで Google Calendar と Gmail がまとめて連携されます。
-            </p>
+            </Typography>
 
-            <SecretInput
-              label="ラベル（任意）"
-              value={label}
-              onChange={setLabel}
-              placeholder="例: 仕事用 / 個人用"
-              secret={false}
-            />
+            <SecretInput label="ラベル（任意）" value={label} onChange={setLabel} placeholder="例: 仕事用 / 個人用" secret={false} />
 
             {!hasDefaults && !showCustom && (
-              <p className="rounded-lg border border-warning/30 bg-warning-soft px-3.5 py-2.5 text-[12px] leading-relaxed text-fg">
-                既定の OAuth クライアントが未設定です。リポジトリ直下の <code className="rounded bg-sunken px-1">.env.local</code> に{' '}
-                <code className="rounded bg-sunken px-1">OMNI_GOOGLE_CLIENT_ID</code> を設定するか、下の「別の OAuth アプリを使う」から入力してください。
-              </p>
+              <Alert severity="warning">
+                既定の OAuth クライアントが未設定です。リポジトリ直下の <code>.env.local</code> に{' '}
+                <code>OMNI_GOOGLE_CLIENT_ID</code> を設定するか、下の「別の OAuth アプリを使う」から入力してください。
+              </Alert>
             )}
 
             {(showCustom || !hasDefaults) && (
-              <div className="space-y-3 rounded-lg border border-line bg-sunken/40 p-3.5">
-                <div className="grid gap-3 sm:grid-cols-2">
+              <Paper
+                variant="outlined"
+                sx={(theme) => ({
+                  p: 2,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 2,
+                  bgcolor: theme.palette.mode === 'dark' ? '#12151a' : '#f6f7f9'
+                })}
+              >
+                <Box sx={{ display: 'grid', gap: 2, gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' } }}>
                   <SecretInput
                     label="Client ID"
                     value={clientId}
@@ -961,14 +1030,14 @@ function GoogleSettings() {
                     onChange={setClientSecret}
                     placeholder="GOCSPX-..."
                   />
-                </div>
-                <p className="text-[11.5px] text-fg-subtle">
+                </Box>
+                <Typography variant="caption" color="text.disabled">
                   ※ リダイレクト URI の手入力や URL のコピペは不要です（ローカルの一時ポートで自動受信します）。
-                </p>
-              </div>
+                </Typography>
+              </Paper>
             )}
 
-            <div className="flex flex-wrap items-center gap-3">
+            <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', alignItems: 'center' }}>
               <Button
                 type="button"
                 variant="primary"
@@ -991,7 +1060,7 @@ function GoogleSettings() {
                     })
                 }
               >
-                <ExternalLink className="size-3.5" />
+                <ExternalLink size={16} />
                 {startOAuth.pending ? 'ブラウザで認証を待機中…' : 'Google アカウントと連携'}
               </Button>
               {accounts.length > 0 && (
@@ -1000,20 +1069,16 @@ function GoogleSettings() {
                 </Button>
               )}
               {hasDefaults && (
-                <button
-                  type="button"
-                  onClick={() => setShowCustom((v) => !v)}
-                  className="text-[12px] text-fg-subtle hover:text-fg"
-                >
+                <Button type="button" size="sm" variant="ghost" onClick={() => setShowCustom((v) => !v)}>
                   {showCustom ? '詳細設定を閉じる' : '別の OAuth アプリを使う'}
-                </button>
+                </Button>
               )}
-            </div>
+            </Stack>
             <ErrorText error={startOAuth.error} />
-          </div>
+          </Stack>
         )}
-      </div>
-    </Card>
+      </Stack>
+    </SectionCard>
   )
 }
 
@@ -1051,78 +1116,90 @@ export function SettingsView() {
   }
 
   return (
-    <div className="flex h-full flex-col">
+    <Stack sx={{ height: '100%' }}>
       <PageHeader title="設定" subtitle="サービスの接続と表示の設定" />
-      <div className="flex min-h-0 flex-1 flex-col md:flex-row">
-        {/* 目次ナビ（広い画面では左サイド目次、狭い画面では上部バー） */}
-        <nav
+      <Stack direction={{ xs: 'column', md: 'row' }} sx={{ minHeight: 0, flex: 1 }}>
+        <Box
+          component="nav"
           aria-label="設定の目次"
-          className="thin-scroll shrink-0 border-b border-line bg-panel/40 px-4 py-3 md:w-52 md:overflow-y-auto md:border-r md:border-b-0 md:px-3 md:py-5"
+          sx={(theme) => ({
+            flexShrink: 0,
+            borderBottom: { xs: `1px solid ${theme.palette.divider}`, md: 'none' },
+            borderRight: { md: `1px solid ${theme.palette.divider}` },
+            bgcolor: theme.palette.background.paper,
+            width: { md: 208 },
+            overflowY: { md: 'auto' },
+            px: 2,
+            py: 2
+          })}
         >
-          <div className="flex gap-1.5 overflow-x-auto md:flex-col md:gap-4">
+          <Stack direction={{ xs: 'row', md: 'column' }} spacing={2} sx={{ overflowX: { xs: 'auto', md: 'visible' } }}>
             {(['integrations', 'app'] as const).map((group) => (
-              <div key={group} className="flex shrink-0 items-center gap-1 md:flex-col md:items-stretch">
-                <p className="hidden px-2.5 pb-1 text-[10.5px] font-semibold tracking-wider text-fg-subtle uppercase md:block">
+              <Stack key={group} direction={{ xs: 'row', md: 'column' }} spacing={0.5} sx={{ flexShrink: 0 }}>
+                <Typography
+                  variant="caption"
+                  color="text.disabled"
+                  sx={{ display: { xs: 'none', md: 'block' }, px: 1, pb: 0.5, fontWeight: 600 }}
+                >
                   {group === 'integrations' ? 'サービス連携' : 'アプリ設定'}
-                </p>
+                </Typography>
                 {sections
                   .filter((s) => s.group === group)
                   .map((item) => {
                     const active = activeId === item.id
                     return (
-                      <button
+                      <ListItemButton
                         key={item.id}
-                        type="button"
+                        selected={active}
                         onClick={() => scrollTo(item.id)}
-                        className={cn(
-                          'flex items-center justify-between gap-2 rounded-lg px-2.5 py-1.5 text-left text-[12.5px] whitespace-nowrap transition-colors',
-                          active ? 'bg-accent/12 font-medium text-accent-text' : 'text-fg-muted hover:bg-hover hover:text-fg'
-                        )}
+                        sx={{ borderRadius: 1, px: 1, py: 0.5, minHeight: 32, justifyContent: 'space-between', gap: 1, whiteSpace: 'nowrap' }}
                       >
-                        <span className="flex min-w-0 items-center gap-2">
+                        <Stack direction="row" spacing={1} sx={{ minWidth: 0, alignItems: 'center' }}>
                           {item.group === 'integrations' && (
-                            <span
-                              className={cn(
-                                'size-1.5 shrink-0 rounded-full',
-                                item.connected ? 'bg-success' : 'bg-line-strong'
-                              )}
+                            <Box
+                              component="span"
+                              sx={(theme) => ({
+                                width: 8,
+                                height: 8,
+                                borderRadius: '50%',
+                                flexShrink: 0,
+                                bgcolor: item.connected ? theme.palette.success.main : theme.palette.divider
+                              })}
                             />
                           )}
-                          <span className="truncate">{item.label}</span>
-                        </span>
-                        {item.status && (
-                          <span className="rounded bg-sunken px-1.5 py-px text-[10.5px] text-fg-subtle tabular-nums">
-                            {item.status}
-                          </span>
-                        )}
-                      </button>
+                          <Typography variant="body2" sx={{ fontWeight: active ? 600 : 400 }}>
+                            {item.label}
+                          </Typography>
+                        </Stack>
+                        {item.status && <Chip size="small" label={item.status} />}
+                      </ListItemButton>
                     )
                   })}
-              </div>
+              </Stack>
             ))}
-          </div>
-        </nav>
+          </Stack>
+        </Box>
 
-        <div className="thin-scroll flex-1 overflow-y-auto">
-          <div className="mx-auto max-w-[760px] space-y-5 px-7 py-6">
+        <Box sx={{ flex: 1, overflowY: 'auto' }}>
+          <Stack spacing={3} sx={{ mx: 'auto', maxWidth: 760, px: 3, py: 3 }}>
             {!settings.encryptionAvailable && (
-              <p className="rounded-lg bg-danger-soft px-3.5 py-3 text-[12.5px] text-danger">
-                OS の暗号化ストレージが利用できないため、トークンを保存できません。
-              </p>
+              <Alert severity="error">OS の暗号化ストレージが利用できないため、トークンを保存できません。</Alert>
             )}
-            <div id="settings-slack" className="scroll-mt-6"><SlackSettings /></div>
-            <div id="settings-chatwork" className="scroll-mt-6"><ChatworkSettings /></div>
-            <div id="settings-github" className="scroll-mt-6"><GitHubSettings /></div>
-            <div id="settings-atlassian" className="scroll-mt-6"><AtlassianSettings /></div>
-            <div id="settings-notion" className="scroll-mt-6"><NotionSettings /></div>
-            <div id="settings-google" className="scroll-mt-6"><GoogleSettings /></div>
-            <div id="settings-inbox" className="scroll-mt-6"><InboxSettings /></div>
-            <div id="settings-display" className="scroll-mt-6"><DisplaySettings /></div>
-            <div id="settings-blocked" className="scroll-mt-6"><BlockedSendersSettings /></div>
-            <p className="pb-4 text-center text-[11.5px] text-fg-subtle">Microsoft Teams・その他メール（IMAP / Microsoft 365 等）の連携は今後追加予定です</p>
-          </div>
-        </div>
-      </div>
-    </div>
+            <Box id="settings-slack"><SlackSettings /></Box>
+            <Box id="settings-chatwork"><ChatworkSettings /></Box>
+            <Box id="settings-github"><GitHubSettings /></Box>
+            <Box id="settings-atlassian"><AtlassianSettings /></Box>
+            <Box id="settings-notion"><NotionSettings /></Box>
+            <Box id="settings-google"><GoogleSettings /></Box>
+            <Box id="settings-inbox"><InboxSettings /></Box>
+            <Box id="settings-display"><DisplaySettings /></Box>
+            <Box id="settings-blocked"><BlockedSendersSettings /></Box>
+            <Typography variant="caption" color="text.disabled" sx={{ pb: 2, textAlign: 'center' }}>
+              Microsoft Teams・その他メール（IMAP / Microsoft 365 等）の連携は今後追加予定です
+            </Typography>
+          </Stack>
+        </Box>
+      </Stack>
+    </Stack>
   )
 }

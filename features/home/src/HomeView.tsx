@@ -1,24 +1,35 @@
 import type { ReactNode } from 'react'
 import { AtSign, CalendarClock, CalendarDays, ChevronRight, CircleCheckBig, Inbox, ListChecks, Mail, MessagesSquare, Users, Video } from 'lucide-react'
 import { routes, type Message } from '@omni-desk/contracts'
-import { ConversationKindIcon } from '@omni-desk/message-kit'
+import { ConversationKindIcon, dueInfo, DUE_GROUP_ORDER, formatShortTime, formatToday, greeting, previewText, TaskRow } from '@omni-desk/message-kit'
 import type { FeatureContext } from '@omni-desk/contracts/feature'
-import { TaskRow } from '@omni-desk/message-kit'
-import { Avatar, Button, EmptyState, ErrorNotice, PageHeader, SkeletonList, SourceMark } from '@omni-desk/ui'
-import { cn } from '@omni-desk/ui'
-import { previewText } from '@omni-desk/message-kit'
+import {
+  Avatar,
+  Box,
+  Button,
+  Card,
+  Chip,
+  Divider,
+  EmptyState,
+  ErrorNotice,
+  ListItemButton,
+  PageHeader,
+  SkeletonList,
+  SourceMark,
+  Stack,
+  Typography
+} from '@omni-desk/ui'
 import {
   openExternal,
   useCalendar,
   useChatworkStatus,
+  useConversations,
+  useInbox,
   useServiceState,
   useSettings,
-  useConversations,
   useSlackEmoji,
-  useInbox,
   useUnifiedTasks
 } from '@omni-desk/client'
-import { dueInfo, DUE_GROUP_ORDER, formatShortTime, formatToday, greeting } from '@omni-desk/message-kit'
 
 function StatCard({
   icon,
@@ -35,49 +46,116 @@ function StatCard({
   tone: 'accent' | 'warning' | 'danger' | 'success'
   onClick?: () => void
 }) {
-  const toneCls = {
-    accent: 'bg-accent-soft text-accent-text',
-    warning: 'bg-warning-soft text-warning',
-    danger: 'bg-danger-soft text-danger',
-    success: 'bg-success-soft text-success'
-  }[tone]
   return (
-    <button onClick={onClick} className="card group flex flex-col gap-3 p-4 text-left transition-colors hover:border-line-strong">
-      <div className="flex items-center justify-between">
-        <span className={cn('flex size-8 items-center justify-center rounded-lg', toneCls)}>{icon}</span>
-        <ChevronRight className="size-4 text-fg-subtle opacity-0 transition-opacity group-hover:opacity-100" />
-      </div>
-      <div>
-        <p className="text-[26px] leading-none font-semibold tracking-tight tabular-nums">{value}</p>
-        <p className="mt-1.5 text-[12.5px] font-medium text-fg-muted">{label}</p>
-        {sub && <p className="mt-0.5 text-[11.5px] text-fg-subtle">{sub}</p>}
-      </div>
-    </button>
+    <Card
+      onClick={onClick}
+      sx={(theme) => ({
+        p: 2,
+        cursor: 'pointer',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 2,
+        transition: 'border-color 120ms',
+        '&:hover': {
+          borderColor: theme.palette.text.disabled
+        },
+        '&:hover .stat-arrow': {
+          opacity: 1
+        }
+      })}
+    >
+      <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between' }}>
+        <Box
+          sx={(theme) => {
+            const colorMap = {
+              accent: { bg: theme.palette.action.selected, fg: theme.palette.primary.main },
+              warning: { bg: 'rgba(240, 169, 59, 0.14)', fg: theme.palette.warning.main },
+              danger: { bg: 'rgba(210, 59, 59, 0.12)', fg: theme.palette.error.main },
+              success: { bg: 'rgba(19, 132, 94, 0.12)', fg: theme.palette.success.main }
+            }[tone]
+            return {
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              width: 32,
+              height: 32,
+              borderRadius: 1,
+              bgcolor: colorMap.bg,
+              color: colorMap.fg
+            }
+          }}
+        >
+          {icon}
+        </Box>
+        <Box className="stat-arrow" sx={{ opacity: 0, transition: 'opacity 120ms', color: 'text.disabled' }}>
+          <ChevronRight size={16} />
+        </Box>
+      </Stack>
+      <Box>
+        <Typography variant="h1" sx={{ fontSize: '24px', fontWeight: 600, lineHeight: 1.2, fontVariantNumeric: 'tabular-nums' }}>
+          {value}
+        </Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ mt: 1, fontWeight: 500 }}>
+          {label}
+        </Typography>
+        {sub && (
+          <Typography variant="caption" color="text.disabled" sx={{ display: 'block', mt: 0.5 }}>
+            {sub}
+          </Typography>
+        )}
+      </Box>
+    </Card>
   )
 }
 
 function MessagePreviewRow({ message, onOpen }: { message: Message; onOpen: () => void }) {
   const emoji = useSlackEmoji()
   return (
-    <button onClick={onOpen} className="flex w-full gap-3 px-4 py-3 text-left transition-colors hover:bg-hover/60">
-      <div className="relative h-fit shrink-0">
+    <ListItemButton onClick={onOpen} sx={{ alignItems: 'flex-start', gap: 2, px: 2, py: 2 }}>
+      <Box sx={{ position: 'relative', flexShrink: 0 }}>
         <Avatar name={message.author.name} url={message.author.avatarUrl} size={32} />
-        <span className="absolute -right-1 -bottom-1 rounded-[5px] ring-2 ring-panel">
+        <Box
+          sx={(theme) => ({
+            position: 'absolute',
+            right: -4,
+            bottom: -4,
+            borderRadius: '4px',
+            boxShadow: `0 0 0 2px ${theme.palette.background.paper}`
+          })}
+        >
           <SourceMark source={message.source} size="xs" />
-        </span>
-      </div>
-      <div className="min-w-0 flex-1">
-        <div className="flex items-baseline gap-2">
-          <span className="truncate text-[13px] font-semibold">{message.author.name}</span>
-          <span className="flex min-w-0 items-center gap-1 text-[11.5px] text-fg-subtle">
-            <ConversationKindIcon kind={message.conversationKind} className="size-3" />
-            <span className="truncate">{message.conversationName}</span>
-          </span>
-          <span className="ml-auto shrink-0 text-[11.5px] text-fg-subtle tabular-nums">{formatShortTime(message.createdAt)}</span>
-        </div>
-        <p className="mt-0.5 line-clamp-2 text-[12.5px] leading-relaxed text-fg-muted">{previewText(message, emoji)}</p>
-      </div>
-    </button>
+        </Box>
+      </Box>
+      <Box sx={{ minWidth: 0, flex: 1 }}>
+        <Stack direction="row" spacing={1} sx={{ alignItems: 'baseline' }}>
+          <Typography variant="body1" sx={{ fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {message.author.name}
+          </Typography>
+          <Stack direction="row" spacing={0.5} sx={{ minWidth: 0, alignItems: 'center', color: 'text.disabled' }}>
+            <ConversationKindIcon kind={message.conversationKind} />
+            <Typography variant="caption" sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {message.conversationName}
+            </Typography>
+          </Stack>
+          <Typography variant="caption" color="text.disabled" sx={{ ml: 'auto !important', flexShrink: 0, fontVariantNumeric: 'tabular-nums' }}>
+            {formatShortTime(message.createdAt)}
+          </Typography>
+        </Stack>
+        <Typography
+          variant="body2"
+          color="text.secondary"
+          sx={{
+            mt: 0.5,
+            overflow: 'hidden',
+            display: '-webkit-box',
+            WebkitLineClamp: 2,
+            WebkitBoxOrient: 'vertical'
+          }}
+        >
+          {previewText(message, emoji)}
+        </Typography>
+      </Box>
+    </ListItemButton>
   )
 }
 
@@ -95,28 +173,22 @@ function ServiceRow({
   onClick?: () => void
 }) {
   const label = { connected: '接続済み', demo: 'デモ表示', off: '未接続', soon: '準備中' }[status]
+  const color = status === 'connected' ? 'success' : status === 'demo' ? 'warning' : 'default'
   return (
-    <button
-      onClick={onClick}
-      disabled={!onClick}
-      className="flex w-full items-center gap-3 px-4 py-2.5 text-left transition-colors enabled:hover:bg-hover/60"
-    >
-      <span className="flex size-7 items-center justify-center">{icon}</span>
-      <div className="min-w-0 flex-1">
-        <p className="text-[13px] font-medium">{name}</p>
-        {detail && <p className="truncate text-[11.5px] text-fg-subtle">{detail}</p>}
-      </div>
-      <span
-        className={cn(
-          'rounded-full px-2 py-0.5 text-[11px] font-medium',
-          status === 'connected' && 'bg-success-soft text-success',
-          status === 'demo' && 'bg-warning-soft text-warning',
-          (status === 'off' || status === 'soon') && 'bg-sunken text-fg-subtle'
+    <ListItemButton onClick={onClick} disabled={!onClick} sx={{ gap: 2, px: 2, py: 1.5 }}>
+      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 32, height: 32 }}>{icon}</Box>
+      <Box sx={{ minWidth: 0, flex: 1 }}>
+        <Typography variant="body1" sx={{ fontWeight: 500 }}>
+          {name}
+        </Typography>
+        {detail && (
+          <Typography variant="caption" color="text.disabled" sx={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {detail}
+          </Typography>
         )}
-      >
-        {label}
-      </span>
-    </button>
+      </Box>
+      <Chip size="small" color={color} variant={color === 'default' ? 'outlined' : 'filled'} label={label} />
+    </ListItemButton>
   )
 }
 
@@ -135,7 +207,6 @@ export function HomeView({ navigate }: FeatureContext) {
   todayStart.setHours(0, 0, 0, 0)
   const todayEndMs = todayStart.getTime() + 86_400_000
   const todayEvents = calendar.events.filter((e) => e.endAt > now && e.startAt < todayEndMs).slice(0, 4)
-  // ホームに出すのは未対応の自分宛て（受信箱・サイドバーの件数と同じ規則）
   const openItems = inbox.entries.filter((e) => e.status === 'open').map((e) => e.message)
   const openTasks = tasks.items.filter((t) => t.status === 'open')
   const overdue = openTasks.filter((t) => dueInfo(t, now).group === 'overdue').length
@@ -157,10 +228,10 @@ export function HomeView({ navigate }: FeatureContext) {
     s.demo ? 'demo' : s.connected ? 'connected' : 'off'
 
   return (
-    <div className="flex h-full flex-col">
+    <Stack sx={{ height: '100%' }}>
       <PageHeader title={greeting()} subtitle={formatToday()} />
-      <div className="thin-scroll flex-1 overflow-y-auto">
-        <div className="mx-auto max-w-[1180px] space-y-6 px-7 py-6">
+      <Box sx={{ flex: 1, overflowY: 'auto' }}>
+        <Stack spacing={3} sx={{ mx: 'auto', maxWidth: 1184, px: 3, py: 3 }}>
           {firstError?.error && (
             <ErrorNotice
               error={firstError.error}
@@ -170,9 +241,15 @@ export function HomeView({ navigate }: FeatureContext) {
             />
           )}
 
-          <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
+          <Box
+            sx={{
+              display: 'grid',
+              gap: 2,
+              gridTemplateColumns: { xs: 'repeat(2, minmax(0, 1fr))', xl: 'repeat(4, minmax(0, 1fr))' }
+            }}
+          >
             <StatCard
-              icon={<AtSign className="size-4" />}
+              icon={<AtSign size={16} />}
               tone="accent"
               label="未対応の自分宛て"
               value={inbox.counts.open}
@@ -180,7 +257,7 @@ export function HomeView({ navigate }: FeatureContext) {
               onClick={() => navigate(routes.inbox())}
             />
             <StatCard
-              icon={<MessagesSquare className="size-4" />}
+              icon={<MessagesSquare size={16} />}
               tone="success"
               label="未読"
               value={cwUnread + slackUnreadConvs}
@@ -188,7 +265,7 @@ export function HomeView({ navigate }: FeatureContext) {
               onClick={() => navigate(routes.conversations(cwUnread > 0 || !slack.enabled ? 'chatwork' : 'slack'))}
             />
             <StatCard
-              icon={<ListChecks className="size-4" />}
+              icon={<ListChecks size={16} />}
               tone="warning"
               label="未完了タスク"
               value={openTasks.length}
@@ -196,134 +273,154 @@ export function HomeView({ navigate }: FeatureContext) {
               onClick={() => navigate(routes.tasks())}
             />
             <StatCard
-              icon={<CalendarClock className="size-4" />}
+              icon={<CalendarClock size={16} />}
               tone="danger"
               label="期限切れ"
               value={overdue}
               sub={overdue > 0 ? '早めに対応しましょう' : '期限切れはありません'}
               onClick={() => navigate(routes.tasks())}
             />
-          </div>
+          </Box>
 
           {(todayEvents.length > 0 || settings.googleCalendar) && (
-            <section className="card overflow-hidden">
-              <div className="flex items-center justify-between border-b border-line px-4 py-3">
-                <h2 className="flex items-center gap-2 text-[13.5px] font-semibold">
-                  <CalendarDays className="size-4 text-accent-text" />
-                  今日の予定
-                </h2>
-                <button
-                  onClick={() => navigate(routes.calendar())}
-                  className="flex items-center gap-0.5 text-[12px] text-fg-muted hover:text-fg"
-                >
+            <Card sx={{ overflow: 'hidden' }}>
+              <Stack
+                direction="row"
+                sx={(theme) => ({
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  borderBottom: `1px solid ${theme.palette.divider}`,
+                  px: 2,
+                  py: 1.5
+                })}
+              >
+                <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+                  <CalendarDays size={16} />
+                  <Typography variant="h2">今日の予定</Typography>
+                </Stack>
+                <Button size="sm" variant="ghost" onClick={() => navigate(routes.calendar())}>
                   カレンダーを開く
-                  <ChevronRight className="size-3.5" />
-                </button>
-              </div>
+                  <ChevronRight size={16} />
+                </Button>
+              </Stack>
               {todayEvents.length === 0 ? (
-                <p className="px-4 py-4 text-[12.5px] text-fg-muted">今日の残りの予定はありません</p>
+                <Typography variant="body2" color="text.secondary" sx={{ p: 2 }}>
+                  今日の残りの予定はありません
+                </Typography>
               ) : (
-                <div className="divide-y divide-line">
+                <Stack divider={<Divider />}>
                   {todayEvents.map((ev) => (
-                    <div key={ev.id} className="flex items-center gap-3 px-4 py-2.5">
-                      <span className="w-24 shrink-0 font-mono text-[12px] text-fg-muted">
+                    <Stack key={ev.id} direction="row" spacing={2} sx={{ alignItems: 'center', px: 2, py: 1.5 }}>
+                      <Typography variant="caption" color="text.secondary" sx={{ width: 96, flexShrink: 0 }}>
                         {ev.isAllDay
                           ? '終日'
                           : `${new Date(ev.startAt).toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' })} – ${new Date(ev.endAt).toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' })}`}
-                      </span>
-                      <span className="min-w-0 flex-1 truncate text-[13px] font-medium">{ev.title}</span>
+                      </Typography>
+                      <Typography variant="body1" sx={{ minWidth: 0, flex: 1, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {ev.title}
+                      </Typography>
                       {ev.meetUrl && (
                         <Button size="sm" variant="primary" onClick={() => openExternal(ev.meetUrl!)}>
-                          <Video className="size-3.5" />
+                          <Video size={16} />
                           参加
                         </Button>
                       )}
-                    </div>
+                    </Stack>
                   ))}
-                </div>
+                </Stack>
               )}
-            </section>
+            </Card>
           )}
 
-          <div className="grid grid-cols-1 gap-6 lg:grid-cols-5">
-            <section className="lg:col-span-3">
-              <div className="mb-2.5 flex items-center justify-between">
-                <h2 className="text-[13px] font-semibold">未対応の自分宛て</h2>
-                <button onClick={() => navigate(routes.inbox())} className="text-[12px] text-accent-text hover:underline">
+          <Box
+            sx={{
+              display: 'grid',
+              gap: 3,
+              gridTemplateColumns: { xs: '1fr', lg: '3fr 2fr' }
+            }}
+          >
+            <Box>
+              <Stack direction="row" sx={{ mb: 1, alignItems: 'center', justifyContent: 'space-between' }}>
+                <Typography variant="h2">未対応の自分宛て</Typography>
+                <Button size="sm" variant="ghost" onClick={() => navigate(routes.inbox())}>
                   受信箱を開く
-                </button>
-              </div>
-              <div className="card divide-y divide-line overflow-hidden">
+                </Button>
+              </Stack>
+              <Card sx={{ overflow: 'hidden' }}>
                 {inbox.isLoading && inbox.items.length === 0 ? (
-                  <div className="p-4">
+                  <Box sx={{ p: 2 }}>
                     <SkeletonList rows={5} />
-                  </div>
+                  </Box>
                 ) : openItems.length === 0 ? (
-                  <EmptyState icon={<Inbox className="size-5" />} title="未対応の自分宛てはありません" />
+                  <EmptyState icon={<Inbox size={24} />} title="未対応の自分宛てはありません" />
                 ) : (
-                  openItems
-                    .slice(0, 7)
-                    .map((m) => (
+                  <Stack divider={<Divider />}>
+                    {openItems.slice(0, 7).map((m) => (
                       <MessagePreviewRow key={m.id} message={m} onOpen={() => navigate(routes.conversations(m.source, m.conversationId))} />
-                    ))
+                    ))}
+                  </Stack>
                 )}
-              </div>
-            </section>
+              </Card>
+            </Box>
 
-            <div className="space-y-6 lg:col-span-2">
-              <section>
-                <div className="mb-2.5 flex items-center justify-between">
-                  <h2 className="text-[13px] font-semibold">期限が近いタスク</h2>
-                  <button onClick={() => navigate(routes.tasks())} className="text-[12px] text-accent-text hover:underline">
+            <Stack spacing={3}>
+              <Box>
+                <Stack direction="row" sx={{ mb: 1, alignItems: 'center', justifyContent: 'space-between' }}>
+                  <Typography variant="h2">期限が近いタスク</Typography>
+                  <Button size="sm" variant="ghost" onClick={() => navigate(routes.tasks())}>
                     すべて見る
-                  </button>
-                </div>
-                <div className="card divide-y divide-line overflow-hidden">
+                  </Button>
+                </Stack>
+                <Card sx={{ overflow: 'hidden' }}>
                   {tasks.isLoading && tasks.items.length === 0 ? (
-                    <div className="p-4">
+                    <Box sx={{ p: 2 }}>
                       <SkeletonList rows={4} avatar={false} />
-                    </div>
+                    </Box>
                   ) : upcoming.length === 0 ? (
-                    <EmptyState icon={<CircleCheckBig className="size-5" />} title="未完了のタスクはありません" />
+                    <EmptyState icon={<CircleCheckBig size={24} />} title="未完了のタスクはありません" />
                   ) : (
-                    upcoming.map((t) => <TaskRow key={t.id} task={t} dense />)
+                    <Stack divider={<Divider />}>
+                      {upcoming.map((t) => (
+                        <TaskRow key={t.id} task={t} dense />
+                      ))}
+                    </Stack>
                   )}
-                </div>
-              </section>
+                </Card>
+              </Box>
 
-              <section>
-                <h2 className="mb-2.5 text-[13px] font-semibold">接続サービス</h2>
-                <div className="card divide-y divide-line overflow-hidden">
-                  <ServiceRow
-                    icon={<SourceMark source="slack" size="md" />}
-                    name="Slack"
-                    status={serviceState(slack)}
-                    detail={
-                      settings.slack
-                        ? `${settings.slack.teamName} · ${settings.slack.authType === 'session' ? 'ブラウザセッション' : 'ユーザートークン'}`
-                        : undefined
-                    }
-                    onClick={() => navigate(slack.enabled ? routes.conversations('slack') : routes.settings())}
-                  />
-                  <ServiceRow
-                    icon={<SourceMark source="chatwork" size="md" />}
-                    name="Chatwork"
-                    status={serviceState(chatwork)}
-                    detail={settings.chatwork ? settings.chatwork.name : undefined}
-                    onClick={() => navigate(chatwork.enabled ? routes.conversations('chatwork') : routes.settings())}
-                  />
-                  <ServiceRow
-                    icon={<Users className="size-4 text-teams" />}
-                    name="Microsoft Teams"
-                    status="soon"
-                  />
-                  <ServiceRow icon={<Mail className="size-4 text-mail" />} name="メール" status="soon" />
-                </div>
-              </section>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
+              <Box>
+                <Typography variant="h2" sx={{ mb: 1 }}>
+                  接続サービス
+                </Typography>
+                <Card sx={{ overflow: 'hidden' }}>
+                  <Stack divider={<Divider />}>
+                    <ServiceRow
+                      icon={<SourceMark source="slack" size="md" />}
+                      name="Slack"
+                      status={serviceState(slack)}
+                      detail={
+                        settings.slack
+                          ? `${settings.slack.teamName} · ${settings.slack.authType === 'session' ? 'ブラウザセッション' : 'ユーザートークン'}`
+                          : undefined
+                      }
+                      onClick={() => navigate(slack.enabled ? routes.conversations('slack') : routes.settings())}
+                    />
+                    <ServiceRow
+                      icon={<SourceMark source="chatwork" size="md" />}
+                      name="Chatwork"
+                      status={serviceState(chatwork)}
+                      detail={settings.chatwork ? settings.chatwork.name : undefined}
+                      onClick={() => navigate(chatwork.enabled ? routes.conversations('chatwork') : routes.settings())}
+                    />
+                    <ServiceRow icon={<Users size={16} color="#5059c9" />} name="Microsoft Teams" status="soon" />
+                    <ServiceRow icon={<Mail size={16} color="#0b8bd1" />} name="メール" status="soon" />
+                  </Stack>
+                </Card>
+              </Box>
+            </Stack>
+          </Box>
+        </Stack>
+      </Box>
+    </Stack>
   )
 }

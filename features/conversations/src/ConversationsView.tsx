@@ -1,22 +1,27 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { ArrowUpRight, MessagesSquare, Pin, Search } from 'lucide-react'
 import { routes, type Conversation, type Message, type Route, type Source } from '@omni-desk/contracts'
-import { ChatMessage, ConversationKindIcon, ReplyComposer } from '@omni-desk/message-kit'
+import { ChatMessage, ConversationKindIcon, formatDayHeading, formatShortTime, ReplyComposer, startOfDay } from '@omni-desk/message-kit'
 import type { FeatureContext } from '@omni-desk/contracts/feature'
 import {
   Avatar,
+  Box,
   Button,
   CountBadge,
+  Divider,
   EmptyState,
   ErrorNotice,
+  InputAdornment,
+  ListItemButton,
   NotConnected,
   SkeletonList,
   SOURCE_LABEL,
-  SourceMark
+  SourceMark,
+  Stack,
+  TextField,
+  Typography
 } from '@omni-desk/ui'
-import { cn } from '@omni-desk/ui'
 import { actions, openExternal, useConversations, useHistory, useServiceState, useSettings } from '@omni-desk/client'
-import { formatDayHeading, formatShortTime, startOfDay } from '@omni-desk/message-kit'
 
 function conversationUrl(source: Source, c: Conversation, teamUrl?: string): string | undefined {
   if (source === 'chatwork') return `https://www.chatwork.com/#!rid${c.id}`
@@ -32,34 +37,51 @@ function composerPlaceholder(c: Conversation): string {
 function ConversationRow({ c, active, onClick }: { c: Conversation; active: boolean; onClick: () => void }) {
   const unread = c.hasUnread || (c.unreadCount ?? 0) > 0
   return (
-    <button
+    <ListItemButton
+      selected={active}
       onClick={onClick}
-      className={cn(
-        'flex h-9 w-full items-center gap-2.5 rounded-lg px-2.5 text-left transition-colors',
-        active ? 'bg-accent-soft text-accent-text' : 'text-fg-muted hover:bg-hover hover:text-fg'
-      )}
+      sx={(theme) => ({
+        borderRadius: 1,
+        px: 1,
+        py: 1,
+        minHeight: 32,
+        gap: 1,
+        color: active ? theme.palette.primary.main : theme.palette.text.secondary
+      })}
     >
-      {c.kind === 'dm' ? (
-        <Avatar name={c.name} url={c.iconUrl} size={20} />
-      ) : c.iconUrl ? (
-        <Avatar name={c.name} url={c.iconUrl} size={20} />
+      {c.kind === 'dm' || c.iconUrl ? (
+        <Avatar name={c.name} url={c.iconUrl} size={24} />
       ) : (
-        <span className="flex size-5 items-center justify-center">
-          <ConversationKindIcon kind={c.kind} className="size-4" />
-        </span>
+        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 24, height: 24 }}>
+          <ConversationKindIcon kind={c.kind} />
+        </Box>
       )}
-      <span className={cn('flex-1 truncate text-[13px]', unread && !active && 'font-semibold text-fg')}>{c.name}</span>
-      {c.pinned && <Pin className="size-3 shrink-0 text-fg-subtle" />}
+      <Typography
+        variant="body2"
+        sx={{
+          flex: 1,
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          whiteSpace: 'nowrap',
+          fontWeight: unread && !active ? 600 : 400,
+          color: unread && !active ? 'text.primary' : 'inherit'
+        }}
+      >
+        {c.name}
+      </Typography>
+      {c.pinned && <Pin size={12} />}
       {c.mentionCount ? (
         <CountBadge count={c.mentionCount} tone="danger" />
       ) : c.unreadCount ? (
         <CountBadge count={c.unreadCount} tone="muted" />
       ) : c.hasUnread ? (
-        <span className="size-2 rounded-full bg-accent" />
+        <Box component="span" sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: 'primary.main' }} />
       ) : c.lastActivityAt ? (
-        <span className="shrink-0 text-[11px] text-fg-subtle tabular-nums">{formatShortTime(c.lastActivityAt)}</span>
+        <Typography variant="caption" color="text.disabled" sx={{ flexShrink: 0, fontVariantNumeric: 'tabular-nums' }}>
+          {formatShortTime(c.lastActivityAt)}
+        </Typography>
       ) : null}
-    </button>
+    </ListItemButton>
   )
 }
 
@@ -70,7 +92,6 @@ function groupConversations(source: Source, list: Conversation[]): { title: stri
       { title: 'チャット', items: list.filter((c) => !c.pinned) }
     ].filter((g) => g.items.length)
   }
-  // 未読情報がある（セッション接続）なら最近順の 1 リスト、なければ種類ごと
   if (list.some((c) => c.lastActivityAt)) return [{ title: '最近のアクティビティ', items: list }]
   return [
     { title: 'チャンネル', items: list.filter((c) => c.kind === 'channel' || c.kind === 'private') },
@@ -98,7 +119,6 @@ function MessagesPane({
   const scrollRef = useRef<HTMLDivElement>(null)
   const lastId = messages?.[messages.length - 1]?.id
 
-  // 会話を開いたとき・新着が来たときは最下部へ
   useEffect(() => {
     const el = scrollRef.current
     if (el) el.scrollTop = el.scrollHeight
@@ -107,36 +127,61 @@ function MessagesPane({
   const url = conversationUrl(source, conversation, teamUrl)
 
   return (
-    <div className="flex min-w-0 flex-1 flex-col bg-panel">
-      <header className="drag flex h-[60px] shrink-0 items-center gap-3 border-b border-line px-6">
-        <span className="flex size-7 items-center justify-center rounded-lg bg-sunken text-fg-muted">
-          <ConversationKindIcon kind={conversation.kind} className="size-4" />
-        </span>
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-[14.5px] font-semibold">{conversation.name}</p>
-          <p className="text-[11.5px] text-fg-subtle">
+    <Stack sx={{ minWidth: 0, flex: 1, bgcolor: 'background.paper' }}>
+      <Stack
+        component="header"
+        direction="row"
+        spacing={2}
+        className="drag"
+        sx={(theme) => ({
+          height: 64,
+          flexShrink: 0,
+          alignItems: 'center',
+          borderBottom: `1px solid ${theme.palette.divider}`,
+          px: 3
+        })}
+      >
+        <Box
+          sx={(theme) => ({
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            width: 32,
+            height: 32,
+            borderRadius: 1,
+            bgcolor: theme.palette.mode === 'dark' ? '#12151a' : '#f6f7f9',
+            color: 'text.secondary'
+          })}
+        >
+          <ConversationKindIcon kind={conversation.kind} />
+        </Box>
+        <Box sx={{ minWidth: 0, flex: 1 }}>
+          <Typography variant="body1" sx={{ fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {conversation.name}
+          </Typography>
+          <Typography variant="caption" color="text.disabled">
             {SOURCE_LABEL[source]} · {messages ? `直近 ${messages.length} 件` : '読み込み中'}
-          </p>
-        </div>
+          </Typography>
+        </Box>
         {url && (
           <Button size="sm" onClick={() => openExternal(url)}>
             {SOURCE_LABEL[source]} で開く
-            <ArrowUpRight className="size-3.5" />
+            <ArrowUpRight size={16} />
           </Button>
         )}
-      </header>
+      </Stack>
 
-      <div ref={scrollRef} className="thin-scroll flex-1 overflow-y-auto py-3">
+      <Box ref={scrollRef} sx={{ flex: 1, overflowY: 'auto', py: 2 }}>
         {error ? (
-          <div className="px-6">
+          <Box sx={{ px: 3 }}>
             <ErrorNotice error={error} source={source} onRetry={onRetry} />
-          </div>
+          </Box>
         ) : isLoading && !messages ? (
-          <div className="px-6 py-2">
+          <Box sx={{ px: 3, py: 1 }}>
             <SkeletonList rows={6} />
-          </div>
+          </Box>
         ) : !messages?.length ? (
-          <EmptyState icon={<MessagesSquare className="size-5" />} title="メッセージはありません" />
+          <EmptyState icon={<MessagesSquare size={24} />} title="メッセージはありません" />
         ) : (
           messages.map((m, i) => {
             const prev = messages[i - 1]
@@ -144,44 +189,46 @@ function MessagesPane({
             const compact =
               !newDay && prev.author.id === m.author.id && m.createdAt - prev.createdAt < 5 * 60_000
             return (
-              <div key={m.id}>
+              <Box key={m.id}>
                 {newDay && (
-                  <div className="my-3 flex items-center gap-3 px-6">
-                    <div className="h-px flex-1 bg-line" />
-                    <span className="rounded-full border border-line px-2.5 py-0.5 text-[11px] font-medium text-fg-muted">
+                  <Stack direction="row" spacing={2} sx={{ my: 2, alignItems: 'center', px: 3 }}>
+                    <Divider sx={{ flex: 1 }} />
+                    <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 500 }}>
                       {formatDayHeading(m.createdAt)}
-                    </span>
-                    <div className="h-px flex-1 bg-line" />
-                  </div>
+                    </Typography>
+                    <Divider sx={{ flex: 1 }} />
+                  </Stack>
                 )}
                 <ChatMessage message={m} compact={compact} />
-              </div>
+              </Box>
             )
           })
         )}
-      </div>
+      </Box>
 
-      <footer className="shrink-0 border-t border-line px-6 py-3">
-        {/*
-         * 会話への投稿。返信先（replyTo）を渡せばメッセージへの返信にもなる。
-         * TODO(reply-per-message): メッセージごとの返信を実装するときは、ChatMessage の返信ボタンで選んだ返信先を
-         * ここに渡し、header に「〇〇さんへ返信」を表示する（packages/message-kit/src/MessageItems.tsx の同名 TODO 参照）
-         */}
+      <Box
+        component="footer"
+        sx={(theme) => ({
+          flexShrink: 0,
+          borderTop: `1px solid ${theme.palette.divider}`,
+          px: 3,
+          py: 2
+        })}
+      >
         <ReplyComposer
           variant="footer"
           composerKey={`post:${source}:${conversation.id}`}
           target={{ source, conversationId: conversation.id }}
           placeholder={composerPlaceholder(conversation)}
         />
-      </footer>
-    </div>
+      </Box>
+    </Stack>
   )
 }
 
 /** route.params: { source: 'slack' | 'chatwork', conversationId?: string } */
 export function ConversationsView({ route, navigate }: FeatureContext) {
   const source: Source = route.params?.source === 'chatwork' ? 'chatwork' : 'slack'
-  // サービスを切り替えたら検索欄などの状態をリセットする
   return (
     <ConversationsScreen
       key={source}
@@ -207,13 +254,10 @@ function ConversationsScreen({
   const settings = useSettings()
   const service = useServiceState(source)
   const list = useConversations(source)
-  // 検索欄の入力はこの画面だけの一時的な状態なのでローカルに持つ
   const [query, setQuery] = useState('')
 
-  // 接続先の切り替えなどで保存済みの ID が存在しない場合は先頭の会話にフォールバック
   const selected = list.conversations?.find((c) => c.id === selectedId) ?? list.conversations?.[0]
   const effectiveId = selected?.id ?? null
-  // 開いている間はメインの同期エンジンがこの会話を優先して取得・更新する
   const history = useHistory(source, effectiveId)
 
   const filtered = useMemo(() => {
@@ -224,9 +268,9 @@ function ConversationsScreen({
 
   if (!service.enabled) {
     return (
-      <div className="flex h-full items-center justify-center">
+      <Stack sx={{ height: '100%', alignItems: 'center', justifyContent: 'center' }}>
         <NotConnected source={source} onOpenSettings={() => navigate(routes.settings())} />
-      </div>
+      </Stack>
     )
   }
 
@@ -236,27 +280,47 @@ function ConversationsScreen({
       : settings.chatwork?.organizationName ?? settings.chatwork?.name ?? (service.demo ? 'デモアカウント' : '')
 
   return (
-    <div className="flex h-full">
-      <div className="flex w-[290px] shrink-0 flex-col border-r border-line bg-canvas">
-        <div className="drag shrink-0 px-4 pt-5 pb-3">
-          <div className="flex items-center gap-2.5">
+    <Stack direction="row" sx={{ height: '100%' }}>
+      <Stack
+        sx={(theme) => ({
+          width: 288,
+          flexShrink: 0,
+          borderRight: `1px solid ${theme.palette.divider}`,
+          bgcolor: 'background.default'
+        })}
+      >
+        <Box className="drag" sx={{ flexShrink: 0, px: 2, pt: 3, pb: 2 }}>
+          <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
             <SourceMark source={source} size="md" />
-            <div className="min-w-0">
-              <p className="text-[15px] font-semibold leading-tight">{SOURCE_LABEL[source]}</p>
-              <p className="truncate text-[11.5px] text-fg-subtle">{subtitle}</p>
-            </div>
-          </div>
-          <label className="no-drag mt-3.5 flex h-8 items-center gap-2 rounded-lg border border-line bg-panel px-2.5 text-fg-subtle focus-within:border-accent">
-            <Search className="size-3.5" />
-            <input
+            <Box sx={{ minWidth: 0 }}>
+              <Typography variant="body1" sx={{ fontWeight: 600, lineHeight: 1.2 }}>
+                {SOURCE_LABEL[source]}
+              </Typography>
+              <Typography variant="caption" color="text.disabled" sx={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {subtitle}
+              </Typography>
+            </Box>
+          </Stack>
+          <Box className="no-drag" sx={{ mt: 2 }}>
+            <TextField
+              fullWidth
+              size="small"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder={source === 'slack' ? 'チャンネル・DM を検索' : 'チャットを検索'}
-              className="w-full bg-transparent text-[13px] text-fg outline-none placeholder:text-fg-subtle"
+              slotProps={{
+                input: {
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <Search size={16} />
+                    </InputAdornment>
+                  )
+                }
+              }}
             />
-          </label>
-        </div>
-        <div className="thin-scroll flex-1 overflow-y-auto px-2.5 pb-4">
+          </Box>
+        </Box>
+        <Box sx={{ flex: 1, overflowY: 'auto', px: 1, pb: 2 }}>
           {list.error && !list.conversations ? (
             <ErrorNotice
               compact
@@ -265,27 +329,29 @@ function ConversationsScreen({
               onOpenSettings={() => navigate(routes.settings())}
             />
           ) : list.loading ? (
-            <div className="px-1.5 pt-2">
+            <Box sx={{ px: 1, pt: 1 }}>
               <SkeletonList rows={8} avatar={false} />
-            </div>
+            </Box>
           ) : groups.length === 0 ? (
-            <p className="px-2.5 py-6 text-center text-[12.5px] text-fg-subtle">見つかりませんでした</p>
+            <Typography variant="body2" color="text.disabled" sx={{ px: 1, py: 3, textAlign: 'center' }}>
+              見つかりませんでした
+            </Typography>
           ) : (
             groups.map((g) => (
-              <div key={g.title} className="mb-3">
-                <p className="px-2.5 pt-2 pb-1 text-[11px] font-semibold text-fg-subtle">
-                  {g.title} <span className="font-normal">{g.items.length}</span>
-                </p>
-                <div className="space-y-px">
+              <Box key={g.title} sx={{ mb: 2 }}>
+                <Typography variant="caption" color="text.disabled" sx={{ display: 'block', px: 1, pt: 1, pb: 0.5, fontWeight: 600 }}>
+                  {g.title} <Box component="span" sx={{ fontWeight: 400 }}>{g.items.length}</Box>
+                </Typography>
+                <Stack spacing={0.5}>
                   {g.items.map((c) => (
                     <ConversationRow key={c.id} c={c} active={c.id === effectiveId} onClick={() => onSelect(c.id)} />
                   ))}
-                </div>
-              </div>
+                </Stack>
+              </Box>
             ))
           )}
-        </div>
-      </div>
+        </Box>
+      </Stack>
 
       {selected ? (
         <MessagesPane
@@ -299,10 +365,10 @@ function ConversationsScreen({
           teamUrl={settings.slack?.teamUrl}
         />
       ) : (
-        <div className="flex flex-1 items-center justify-center bg-panel">
-          <EmptyState icon={<MessagesSquare className="size-5" />} title="会話を選択してください" />
-        </div>
+        <Stack sx={{ flex: 1, alignItems: 'center', justifyContent: 'center', bgcolor: 'background.paper' }}>
+          <EmptyState icon={<MessagesSquare size={24} />} title="会話を選択してください" />
+        </Stack>
       )}
-    </div>
+    </Stack>
   )
 }

@@ -1,11 +1,11 @@
 import { useEffect } from 'react'
 import { actions } from '@omni-desk/client'
 import type { Message } from '@omni-desk/contracts'
+import { Box, Chip, ListItemButton, Paper, Typography } from '@omni-desk/ui'
 import { formatUntil, snoozeOptions } from './snooze'
 
 /**
  * 「あとで」の時刻を選ぶ欄。数字キー 1〜4 でも選べる。
- * 一覧は角丸のため overflow-hidden で、浮かせるメニューだと切れてしまうので、行の中に展開して表示する。
  */
 export function SnoozeMenu({ message, now }: { message: Message; now: number }) {
   const options = snoozeOptions(now)
@@ -30,29 +30,48 @@ export function SnoozeMenu({ message, now }: { message: Message; now: number }) 
         choose(options[index].until, options[index].label)
       }
     }
-    // 受信箱全体のショートカットより先に処理する
     window.addEventListener('keydown', onKey, true)
     return () => window.removeEventListener('keydown', onKey, true)
   })
 
   return (
-    <div className="animate-fade-in mt-2.5 rounded-lg border border-line bg-sunken p-2">
-      <p className="px-1 pb-1.5 text-[11px] font-semibold text-fg-subtle">あとで（この時刻まで隠す）— 1〜4 キーでも選べます。Esc で閉じる</p>
-      <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-4">
+    <Paper
+      variant="outlined"
+      sx={(theme) => ({
+        mt: 2,
+        p: 1,
+        bgcolor: theme.palette.mode === 'dark' ? '#12151a' : '#f6f7f9'
+      })}
+    >
+      <Typography variant="caption" color="text.disabled" sx={{ display: 'block', px: 1, pb: 1, fontWeight: 600 }}>
+        あとで（この時刻まで隠す）— 1〜4 キーでも選べます。Esc で閉じる
+      </Typography>
+      <Box sx={{ display: 'grid', gap: 1, gridTemplateColumns: { xs: 'repeat(2, 1fr)', sm: 'repeat(4, 1fr)' } }}>
         {options.map((o, i) => (
-          <button
+          <ListItemButton
             key={o.key}
             onClick={() => choose(o.until, o.label)}
-            className="flex items-center gap-2 rounded-md border border-line bg-panel px-2.5 py-1.5 text-left text-[12.5px] transition-colors hover:border-accent hover:bg-accent-soft"
+            sx={(theme) => ({
+              borderRadius: 1,
+              border: `1px solid ${theme.palette.divider}`,
+              bgcolor: theme.palette.background.paper,
+              gap: 1,
+              px: 1.5,
+              py: 1
+            })}
           >
-            <kbd className="w-4 rounded border border-line bg-sunken text-center text-[10px] text-fg-subtle">{i + 1}</kbd>
-            <span className="min-w-0 flex-1">
-              <span className="block truncate font-medium">{o.label}</span>
-              <span className="block truncate text-[11px] text-fg-subtle">{formatUntil(o.until, now)}</span>
-            </span>
-          </button>
+            <Chip size="small" variant="outlined" label={i + 1} />
+            <Box sx={{ minWidth: 0, flex: 1 }}>
+              <Typography variant="body2" sx={{ fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {o.label}
+              </Typography>
+              <Typography variant="caption" color="text.disabled" sx={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {formatUntil(o.until, now)}
+              </Typography>
+            </Box>
+          </ListItemButton>
         ))}
-      </div>
-    </div>
+      </Box>
+    </Paper>
   )
 }

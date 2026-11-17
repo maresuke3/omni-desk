@@ -1,6 +1,6 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react'
 import { TriangleAlert } from 'lucide-react'
-import { Button } from '@omni-desk/ui'
+import { Button, EmptyState } from '@omni-desk/ui'
 
 interface Props {
   featureId: string
@@ -32,16 +32,12 @@ export class FeatureBoundary extends Component<Props, State> {
   render(): ReactNode {
     if (!this.state.error) return this.props.children
     return (
-      <div className="flex h-full flex-col items-center justify-center gap-3 p-10 text-center">
-        <span className="flex size-11 items-center justify-center rounded-xl bg-danger-soft text-danger">
-          <TriangleAlert className="size-5" />
-        </span>
-        <div>
-          <p className="font-medium">この画面でエラーが発生しました</p>
-          <p className="mt-1 max-w-md text-[12.5px] text-fg-muted">{this.state.error.message}</p>
-        </div>
-        <Button onClick={() => this.setState({ error: null })}>再読み込み</Button>
-      </div>
+      <EmptyState
+        icon={<TriangleAlert size={24} />}
+        title="この画面でエラーが発生しました"
+        description={this.state.error.message}
+        action={<Button onClick={() => this.setState({ error: null })}>再読み込み</Button>}
+      />
     )
   }
 }

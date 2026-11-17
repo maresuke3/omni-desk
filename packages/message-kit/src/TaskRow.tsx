@@ -2,33 +2,17 @@ import { useState } from 'react'
 import { ArrowUpRight, CalendarClock, Circle, CircleCheck } from 'lucide-react'
 import type { Task } from '@omni-desk/contracts'
 import { openExternal } from '@omni-desk/client'
-import { cn } from '@omni-desk/ui'
+import { Avatar, Box, Chip, IconButton, SourceMark, Stack, Tooltip, Typography } from '@omni-desk/ui'
 import { dueInfo } from './time'
 import { RichText } from './RichText'
-import { Avatar, IconButton, SourceMark } from '@omni-desk/ui'
-
-const TONE: Record<ReturnType<typeof dueInfo>['tone'], string> = {
-  danger: 'bg-danger-soft text-danger',
-  warning: 'bg-warning-soft text-warning',
-  accent: 'bg-accent-soft text-accent-text',
-  muted: 'bg-sunken text-fg-muted'
-}
 
 export function DueChip({ task }: { task: Task }) {
   const due = dueInfo(task)
   if (task.status === 'done') {
-    return (
-      <span className="inline-flex items-center gap-1 rounded-md bg-success-soft px-1.5 py-0.5 text-[11.5px] font-medium text-success">
-        完了
-      </span>
-    )
+    return <Chip size="small" color="success" variant="outlined" label="完了" sx={{ fontSize: '12px' }} />
   }
-  return (
-    <span className={cn('inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11.5px] font-medium', TONE[due.tone])}>
-      <CalendarClock className="size-3" />
-      {due.label}
-    </span>
-  )
+  const color = due.tone === 'danger' ? 'error' : due.tone === 'warning' ? 'warning' : due.tone === 'accent' ? 'primary' : 'default'
+  return <Chip size="small" color={color} variant="outlined" icon={<CalendarClock size={12} />} label={due.label} sx={{ fontSize: '12px' }} />
 }
 
 /**
@@ -38,43 +22,90 @@ export function TaskRow({ task, dense }: { task: Task; dense?: boolean }) {
   const [expanded, setExpanded] = useState(false)
   const done = task.status === 'done'
   return (
-    <div className={cn('group flex gap-3 px-4 transition-colors hover:bg-hover/60', dense ? 'py-2.5' : 'py-3')}>
-      <span className="mt-0.5 shrink-0" title={done ? '完了' : '未完了'}>
-        {done ? <CircleCheck className="size-[18px] text-success" /> : <Circle className="size-[18px] text-line-strong" />}
-      </span>
-      <div className="min-w-0 flex-1">
-        <button
+    <Stack
+      direction="row"
+      spacing={2}
+      sx={(theme) => ({
+        px: 2,
+        py: dense ? 1 : 2,
+        transition: 'background-color 120ms',
+        '&:hover': { bgcolor: theme.palette.action.hover },
+        '&:hover .task-open-btn': { opacity: 1 }
+      })}
+    >
+      <Tooltip title={done ? '完了' : '未完了'}>
+        <Box component="span" sx={{ mt: 0.5, flexShrink: 0, color: done ? 'success.main' : 'divider' }}>
+          {done ? <CircleCheck size={16} /> : <Circle size={16} />}
+        </Box>
+      </Tooltip>
+      <Box sx={{ minWidth: 0, flex: 1 }}>
+        <Box
+          component="button"
+          type="button"
           onClick={() => setExpanded((v) => !v)}
-          className={cn('block w-full text-left', !expanded && 'line-clamp-3', done && 'text-fg-subtle line-through decoration-fg-subtle/40')}
+          sx={{
+            display: 'block',
+            width: '100%',
+            textAlign: 'left',
+            border: 0,
+            background: 'transparent',
+            p: 0,
+            cursor: 'pointer',
+            color: done ? 'text.disabled' : 'text.primary',
+            textDecoration: done ? 'line-through' : 'none',
+            ...(expanded
+              ? {}
+              : {
+                  overflow: 'hidden',
+                  display: '-webkit-box',
+                  WebkitLineClamp: 3,
+                  WebkitBoxOrient: 'vertical'
+                })
+          }}
         >
-          <RichText text={task.text} format={task.format} className="pointer-events-none leading-relaxed" />
-        </button>
-        <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-fg-muted">
+          <RichText text={task.text} format={task.format} />
+        </Box>
+        <Stack direction="row" spacing={2} sx={{ mt: 1, flexWrap: 'wrap', alignItems: 'center', rowGap: 1 }}>
           <DueChip task={task} />
-          <span className="inline-flex min-w-0 items-center gap-1.5">
+          <Stack direction="row" spacing={1} sx={{ minWidth: 0, alignItems: 'center' }}>
             <SourceMark source={task.source} size="xs" />
-            {task.conversationName && <span className="max-w-[220px] truncate">{task.conversationName}</span>}
-          </span>
+            {task.conversationName && (
+              <Typography
+                variant="caption"
+                color="text.secondary"
+                sx={{ maxWidth: 224, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+              >
+                {task.conversationName}
+              </Typography>
+            )}
+          </Stack>
           {task.assignedBy && !dense && (
-            <span className="inline-flex items-center gap-1.5">
+            <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
               <Avatar name={task.assignedBy.name} url={task.assignedBy.avatarUrl} size={16} />
-              <span className="max-w-[160px] truncate">
+              <Typography
+                variant="caption"
+                color="text.secondary"
+                sx={{ maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+              >
                 {task.assignedBy.name}
-                <span className="text-fg-subtle">{task.source === 'chatwork' ? ' から依頼' : ' の投稿'}</span>
-              </span>
-            </span>
+                <Box component="span" sx={{ color: 'text.disabled' }}>
+                  {task.source === 'chatwork' ? ' から依頼' : ' の投稿'}
+                </Box>
+              </Typography>
+            </Stack>
           )}
-        </div>
-      </div>
+        </Stack>
+      </Box>
       {task.permalink && (
-        <IconButton
-          label={task.source === 'slack' ? 'Slack で開く' : 'Chatwork で開く'}
-          onClick={() => openExternal(task.permalink)}
-          className="opacity-0 group-hover:opacity-100"
-        >
-          <ArrowUpRight className="size-4" />
-        </IconButton>
+        <Box className="task-open-btn" sx={{ opacity: 0, transition: 'opacity 120ms' }}>
+          <IconButton
+            label={task.source === 'slack' ? 'Slack で開く' : 'Chatwork で開く'}
+            onClick={() => openExternal(task.permalink)}
+          >
+            <ArrowUpRight size={16} />
+          </IconButton>
+        </Box>
       )}
-    </div>
+    </Stack>
   )
 }

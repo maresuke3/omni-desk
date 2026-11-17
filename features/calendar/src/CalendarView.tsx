@@ -10,13 +10,31 @@ import {
   RefreshCw,
   Trash2,
   Users,
-  Video,
-  X
+  Video
 } from 'lucide-react'
 import type { CalendarCreateInput, CalendarEvent } from '@omni-desk/contracts'
 import { routes } from '@omni-desk/contracts'
 import { actions, openExternal, useAsyncAction, useCalendar, useSettings } from '@omni-desk/client'
-import { Button, EmptyState, PageHeader, Segmented, cn } from '@omni-desk/ui'
+import {
+  Alert,
+  Box,
+  Button,
+  Card,
+  Checkbox,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  Divider,
+  EmptyState,
+  FormControlLabel,
+  IconButton,
+  PageHeader,
+  Segmented,
+  Stack,
+  TextField,
+  Typography
+} from '@omni-desk/ui'
 
 type ViewRange = 'today' | 'week' | 'all'
 
@@ -117,110 +135,95 @@ function EventModal({
       description: form.description.trim() || undefined
     }
 
-    const ok = editing
-      ? await update.run(editing.calendarId, editing.id, payload)
-      : await create.run(payload)
+    const ok = editing ? await update.run(editing.calendarId, editing.id, payload) : await create.run(payload)
     if (ok) onClose()
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4" onClick={onClose}>
-      <div className="card w-full max-w-md overflow-hidden shadow-xl" onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-center justify-between border-b border-line px-5 py-3.5">
-          <h2 className="text-[14px] font-semibold">{editing ? '予定を編集' : '予定を作成'}</h2>
-          <button type="button" onClick={onClose} className="rounded-md p-1 text-fg-subtle hover:bg-sunken hover:text-fg">
-            <X className="size-4" />
-          </button>
-        </div>
-        <form onSubmit={(e) => void submit(e)} className="space-y-3.5 p-5">
-          <label className="block">
-            <span className="mb-1 block text-[12px] font-medium">タイトル</span>
-            <input
-              type="text"
+    <Dialog open onClose={onClose} fullWidth maxWidth="xs">
+      <form onSubmit={(e) => void submit(e)}>
+        <DialogTitle>{editing ? '予定を編集' : '予定を作成'}</DialogTitle>
+        <DialogContent dividers>
+          <Stack spacing={2}>
+            <TextField
               required
+              label="タイトル"
               value={form.title}
               onChange={(e) => setForm({ ...form, title: e.target.value })}
               placeholder="定例ミーティング"
-              className="h-9 w-full rounded-lg border border-line bg-sunken px-3 text-[13px] outline-none focus:border-accent focus:bg-panel"
+              fullWidth
             />
-          </label>
-          <div className="grid grid-cols-2 gap-3">
-            <label className="block">
-              <span className="mb-1 block text-[12px] font-medium">日付</span>
-              <input
+            <Stack direction="row" spacing={2} sx={{ alignItems: 'center' }}>
+              <TextField
                 type="date"
                 required
+                label="日付"
                 value={form.date}
                 onChange={(e) => setForm({ ...form, date: e.target.value })}
-                className="h-9 w-full rounded-lg border border-line bg-sunken px-3 text-[13px] outline-none focus:border-accent focus:bg-panel"
+                slotProps={{ inputLabel: { shrink: true } }}
+                sx={{ flex: 1 }}
               />
-            </label>
-            <label className="flex items-end gap-2 pb-2 text-[12.5px]">
-              <input
-                type="checkbox"
-                checked={form.isAllDay}
-                onChange={(e) => setForm({ ...form, isAllDay: e.target.checked })}
-                className="size-4 accent-accent"
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    checked={form.isAllDay}
+                    onChange={(e) => setForm({ ...form, isAllDay: e.target.checked })}
+                  />
+                }
+                label="終日"
               />
-              終日
-            </label>
-          </div>
-          {!form.isAllDay && (
-            <div className="grid grid-cols-2 gap-3">
-              <label className="block">
-                <span className="mb-1 block text-[12px] font-medium">開始</span>
-                <input
+            </Stack>
+            {!form.isAllDay && (
+              <Stack direction="row" spacing={2}>
+                <TextField
                   type="time"
                   required
+                  label="開始"
                   value={form.startTime}
                   onChange={(e) => setForm({ ...form, startTime: e.target.value })}
-                  className="h-9 w-full rounded-lg border border-line bg-sunken px-3 text-[13px] outline-none focus:border-accent focus:bg-panel"
+                  slotProps={{ inputLabel: { shrink: true } }}
+                  fullWidth
                 />
-              </label>
-              <label className="block">
-                <span className="mb-1 block text-[12px] font-medium">終了</span>
-                <input
+                <TextField
                   type="time"
                   required
+                  label="終了"
                   value={form.endTime}
                   onChange={(e) => setForm({ ...form, endTime: e.target.value })}
-                  className="h-9 w-full rounded-lg border border-line bg-sunken px-3 text-[13px] outline-none focus:border-accent focus:bg-panel"
+                  slotProps={{ inputLabel: { shrink: true } }}
+                  fullWidth
                 />
-              </label>
-            </div>
-          )}
-          <label className="block">
-            <span className="mb-1 block text-[12px] font-medium">場所（任意）</span>
-            <input
-              type="text"
+              </Stack>
+            )}
+            <TextField
+              label="場所（任意）"
               value={form.location}
               onChange={(e) => setForm({ ...form, location: e.target.value })}
               placeholder="会議室 / オンライン"
-              className="h-9 w-full rounded-lg border border-line bg-sunken px-3 text-[13px] outline-none focus:border-accent focus:bg-panel"
+              fullWidth
             />
-          </label>
-          <label className="block">
-            <span className="mb-1 block text-[12px] font-medium">メモ（任意）</span>
-            <textarea
+            <TextField
+              multiline
               rows={3}
+              label="メモ（任意）"
               value={form.description}
               onChange={(e) => setForm({ ...form, description: e.target.value })}
               placeholder="アジェンダや共有事項"
-              className="w-full rounded-lg border border-line bg-sunken p-3 text-[13px] outline-none focus:border-accent focus:bg-panel"
+              fullWidth
             />
-          </label>
-          {error && <p className="rounded-md bg-danger-soft px-3 py-2 text-[12px] text-danger">{error.message}</p>}
-          <div className="flex justify-end gap-2 pt-1">
-            <Button type="button" onClick={onClose}>
-              キャンセル
-            </Button>
-            <Button type="submit" variant="primary" loading={pending} disabled={!form.title.trim()}>
-              {editing ? '更新する' : '作成する'}
-            </Button>
-          </div>
-        </form>
-      </div>
-    </div>
+            {error && <Alert severity="error">{error.message}</Alert>}
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button type="button" onClick={onClose}>
+            キャンセル
+          </Button>
+          <Button type="submit" variant="primary" loading={pending} disabled={!form.title.trim()}>
+            {editing ? '更新する' : '作成する'}
+          </Button>
+        </DialogActions>
+      </form>
+    </Dialog>
   )
 }
 
@@ -259,25 +262,36 @@ export function CalendarView() {
       : 'Google Calendar 未接続'
 
   return (
-    <div className="flex h-full flex-col">
+    <Stack sx={{ height: '100%' }}>
       <PageHeader
         title="カレンダー"
         subtitle={subtitle}
         actions={
           <>
             <Button size="sm" onClick={() => actions.refreshCalendar()} loading={calendar.loading}>
-              <RefreshCw className="size-3.5" />
+              <RefreshCw size={16} />
               更新
             </Button>
             <Button size="sm" variant="primary" onClick={() => setModal({ open: true })}>
-              <Plus className="size-3.5" />
+              <Plus size={16} />
               予定を作成
             </Button>
           </>
         }
       />
 
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line px-7 py-3">
+      <Stack
+        direction="row"
+        spacing={2}
+        sx={(theme) => ({
+          flexWrap: 'wrap',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          borderBottom: `1px solid ${theme.palette.divider}`,
+          px: 3,
+          py: 2
+        })}
+      >
         <Segmented<ViewRange>
           size="sm"
           value={range}
@@ -289,37 +303,27 @@ export function CalendarView() {
           ]}
         />
         {range !== 'all' && (
-          <div className="flex items-center gap-1.5">
-            <Button
-              size="sm"
-              onClick={() => setAnchorDay((d) => d - (range === 'today' ? 1 : 7) * 86_400_000)}
-              title="前へ"
-            >
-              <ChevronLeft className="size-3.5" />
-            </Button>
+          <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+            <IconButton label="前へ" onClick={() => setAnchorDay((d) => d - (range === 'today' ? 1 : 7) * 86_400_000)}>
+              <ChevronLeft size={16} />
+            </IconButton>
             <Button size="sm" onClick={() => setAnchorDay(todayMs)}>
               今日
             </Button>
-            <Button
-              size="sm"
-              onClick={() => setAnchorDay((d) => d + (range === 'today' ? 1 : 7) * 86_400_000)}
-              title="次へ"
-            >
-              <ChevronRight className="size-3.5" />
-            </Button>
-          </div>
+            <IconButton label="次へ" onClick={() => setAnchorDay((d) => d + (range === 'today' ? 1 : 7) * 86_400_000)}>
+              <ChevronRight size={16} />
+            </IconButton>
+          </Stack>
         )}
-      </div>
+      </Stack>
 
-      <div className="thin-scroll flex-1 overflow-y-auto px-7 py-5">
-        <div className="mx-auto max-w-[820px] space-y-6">
-          {calendar.error && (
-            <p className="rounded-lg bg-danger-soft px-4 py-3 text-[12.5px] text-danger">{calendar.error.message}</p>
-          )}
+      <Box sx={{ flex: 1, overflowY: 'auto', px: 3, py: 3 }}>
+        <Stack spacing={3} sx={{ mx: 'auto', maxWidth: 824 }}>
+          {calendar.error && <Alert severity="error">{calendar.error.message}</Alert>}
 
           {!settings.googleCalendar && !settings.demoActive ? (
             <EmptyState
-              icon={<CalendarDays className="size-6" />}
+              icon={<CalendarDays size={24} />}
               title="Google Calendar が未接続です"
               description="設定画面から Google OAuth 連携を行うと、予定の確認・作成・Google Meet への参加ができます。"
               action={
@@ -330,92 +334,99 @@ export function CalendarView() {
             />
           ) : grouped.length === 0 ? (
             <EmptyState
-              icon={<CalendarDays className="size-6" />}
+              icon={<CalendarDays size={24} />}
               title="この期間の予定はありません"
               description="右上の「予定を作成」から新しい予定を追加できます。"
             />
           ) : (
             grouped.map(([day, events]) => (
-              <section key={day} className="space-y-2.5">
-                <h2 className="text-[12.5px] font-semibold text-fg-muted">{formatDayHeading(day, todayMs)}</h2>
-                <div className="card divide-y divide-line overflow-hidden">
-                  {events.map((ev) => {
-                    const isPast = ev.endAt < Date.now()
-                    return (
-                      <div key={ev.id} className={cn('flex items-start gap-4 px-4 py-3.5', isPast && 'opacity-65')}>
-                        <div className="w-28 shrink-0 pt-0.5 font-mono text-[12px] text-fg-muted">
-                          {ev.isAllDay ? '終日' : `${formatTime(ev.startAt)} – ${formatTime(ev.endAt)}`}
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <p className="font-medium text-fg">{ev.title}</p>
-                          <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-fg-muted">
-                            {ev.location && (
-                              <span className="inline-flex items-center gap-1">
-                                <MapPin className="size-3" />
-                                {ev.location}
-                              </span>
+              <Stack key={day} spacing={1}>
+                <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 600 }}>
+                  {formatDayHeading(day, todayMs)}
+                </Typography>
+                <Card sx={{ overflow: 'hidden' }}>
+                  <Stack divider={<Divider />}>
+                    {events.map((ev) => {
+                      const isPast = ev.endAt < Date.now()
+                      return (
+                        <Stack
+                          key={ev.id}
+                          direction="row"
+                          spacing={2}
+                          sx={{ alignItems: 'flex-start', px: 2, py: 2, opacity: isPast ? 0.65 : 1 }}
+                        >
+                          <Typography variant="caption" color="text.secondary" sx={{ width: 112, flexShrink: 0, pt: 0.5 }}>
+                            {ev.isAllDay ? '終日' : `${formatTime(ev.startAt)} – ${formatTime(ev.endAt)}`}
+                          </Typography>
+                          <Box sx={{ minWidth: 0, flex: 1 }}>
+                            <Typography variant="body1" sx={{ fontWeight: 500 }}>
+                              {ev.title}
+                            </Typography>
+                            <Stack direction="row" spacing={2} sx={{ mt: 0.5, flexWrap: 'wrap', alignItems: 'center', color: 'text.secondary' }}>
+                              {ev.location && (
+                                <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
+                                  <MapPin size={12} />
+                                  <Typography variant="caption">{ev.location}</Typography>
+                                </Stack>
+                              )}
+                              {ev.attendees && ev.attendees.length > 0 && (
+                                <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
+                                  <Users size={12} />
+                                  <Typography variant="caption">{ev.attendees.length} 名</Typography>
+                                </Stack>
+                              )}
+                            </Stack>
+                            {ev.description && (
+                              <Typography
+                                variant="caption"
+                                color="text.disabled"
+                                sx={{
+                                  mt: 1,
+                                  overflow: 'hidden',
+                                  display: '-webkit-box',
+                                  WebkitLineClamp: 2,
+                                  WebkitBoxOrient: 'vertical'
+                                }}
+                              >
+                                {ev.description}
+                              </Typography>
                             )}
-                            {ev.attendees && ev.attendees.length > 0 && (
-                              <span className="inline-flex items-center gap-1">
-                                <Users className="size-3" />
-                                {ev.attendees.length} 名
-                              </span>
+                          </Box>
+                          <Stack direction="row" spacing={1} sx={{ flexShrink: 0, alignItems: 'center' }}>
+                            {ev.meetUrl && (
+                              <Button size="sm" variant="primary" onClick={() => openExternal(ev.meetUrl!)}>
+                                <Video size={16} />
+                                参加
+                              </Button>
                             )}
-                          </div>
-                          {ev.description && (
-                            <p className="mt-1.5 line-clamp-2 text-[12px] text-fg-subtle">{ev.description}</p>
-                          )}
-                        </div>
-                        <div className="flex shrink-0 items-center gap-1.5">
-                          {ev.meetUrl && (
-                            <Button size="sm" variant="primary" onClick={() => openExternal(ev.meetUrl!)}>
-                              <Video className="size-3.5" />
-                              参加
-                            </Button>
-                          )}
-                          <button
-                            type="button"
-                            onClick={() => setModal({ open: true, editing: ev })}
-                            className="rounded-md p-1.5 text-fg-subtle hover:bg-sunken hover:text-fg"
-                            title="編集"
-                          >
-                            <Pencil className="size-3.5" />
-                          </button>
-                          <button
-                            type="button"
-                            disabled={remove.pending}
-                            onClick={() => void remove.run(ev.calendarId, ev.id)}
-                            className="rounded-md p-1.5 text-fg-subtle hover:bg-danger-soft hover:text-danger"
-                            title="削除"
-                          >
-                            <Trash2 className="size-3.5" />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => openExternal(ev.htmlLink)}
-                            className="rounded-md p-1.5 text-fg-subtle hover:bg-sunken hover:text-fg"
-                            title="Google Calendar で開く"
-                          >
-                            <ExternalLink className="size-3.5" />
-                          </button>
-                        </div>
-                      </div>
-                    )
-                  })}
-                </div>
-              </section>
+                            <IconButton label="編集" onClick={() => setModal({ open: true, editing: ev })}>
+                              <Pencil size={16} />
+                            </IconButton>
+                            <IconButton
+                              label="削除"
+                              disabled={remove.pending}
+                              onClick={() => void remove.run(ev.calendarId, ev.id)}
+                            >
+                              <Trash2 size={16} />
+                            </IconButton>
+                            <IconButton label="Google Calendar で開く" onClick={() => openExternal(ev.htmlLink)}>
+                              <ExternalLink size={16} />
+                            </IconButton>
+                          </Stack>
+                        </Stack>
+                      )
+                    })}
+                  </Stack>
+                </Card>
+              </Stack>
             ))
           )}
-        </div>
-      </div>
+        </Stack>
+      </Box>
 
       {modal.open && (
-        <EventModal
-          editing={modal.editing}
-          baseDayMs={anchorDay}
-          onClose={() => setModal({ open: false })}
-        />
+        <EventModal editing={modal.editing} baseDayMs={anchorDay} onClose={() => setModal({ open: false })} />
       )}
-    </div>
+    </Stack>
   )
 }

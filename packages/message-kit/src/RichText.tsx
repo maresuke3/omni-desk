@@ -2,7 +2,7 @@ import { Fragment, useMemo, type ReactNode } from 'react'
 import { CircleCheck, Paperclip, Quote } from 'lucide-react'
 import type { SlackEmojiMap, TextFormat } from '@omni-desk/contracts'
 import { parseChatwork, replaceEmoticons, type CwNode } from './chatwork-markup'
-import { cn } from '@omni-desk/ui'
+import { Box, Chip, Divider, Paper, Stack, Typography } from '@omni-desk/ui'
 import { resolveEmoji } from './emoji'
 import { openExternal, useAppStore, useSlackEmoji } from '@omni-desk/client'
 import { parseSlack, type SlackBlock, type SlackInline } from './slack-markup'
@@ -16,7 +16,57 @@ export function RichText({ text, format, className }: { text: string; format: Te
     if (format === 'chatwork') return renderChatwork(parseChatwork(text, identity?.chatworkAccountId))
     return <Linkified text={text} />
   }, [text, format, identity?.slackUserId, identity?.chatworkAccountId, emoji])
-  return <div className={cn('rich selectable', className)}>{content}</div>
+  return (
+    <Box
+      data-selectable
+      className={className}
+      sx={(theme) => ({
+        userSelect: 'text',
+        wordBreak: 'break-word',
+        fontSize: '16px',
+        lineHeight: 1.5,
+        '& a': {
+          color: theme.palette.primary.main,
+          textDecoration: 'underline',
+          textUnderlineOffset: '2px'
+        },
+        '& code': {
+          fontFamily: "ui-monospace, 'SF Mono', Menlo, Consolas, monospace",
+          fontSize: '0.88em',
+          bgcolor: theme.palette.mode === 'dark' ? '#12151a' : '#f6f7f9',
+          border: `1px solid ${theme.palette.divider}`,
+          borderRadius: '4px',
+          px: '4px',
+          py: '2px'
+        },
+        '& pre': {
+          fontFamily: "ui-monospace, 'SF Mono', Menlo, Consolas, monospace",
+          fontSize: '12px',
+          bgcolor: theme.palette.mode === 'dark' ? '#12151a' : '#f6f7f9',
+          border: `1px solid ${theme.palette.divider}`,
+          borderRadius: 1,
+          p: 1.5,
+          my: 1,
+          overflowX: 'auto',
+          whiteSpace: 'pre-wrap'
+        },
+        '& blockquote': {
+          borderLeft: `3px solid ${theme.palette.divider}`,
+          pl: 1.5,
+          my: 1,
+          color: theme.palette.text.secondary
+        },
+        '& .emoji-img': {
+          display: 'inline-block',
+          width: 16,
+          height: 16,
+          verticalAlign: '-0.2em'
+        }
+      })}
+    >
+      {content}
+    </Box>
+  )
 }
 
 // ------------------------------------------------------------ common
@@ -53,19 +103,39 @@ function Linkified({ text, transform }: { text: string; transform?: (s: string) 
     last = index + m[0].length
   }
   if (last < text.length) parts.push(transform ? transform(text.slice(last)) : text.slice(last))
-  return <span className="whitespace-pre-wrap">{parts}</span>
+  return <Box component="span" sx={{ whiteSpace: 'pre-wrap' }}>{parts}</Box>
 }
 
 function MentionChip({ label, self, tone = 'accent' }: { label: ReactNode; self?: boolean; tone?: 'accent' | 'muted' }) {
   return (
-    <span
-      className={cn(
-        'mx-px inline-flex items-center rounded px-1 py-px text-[0.92em] font-medium leading-tight',
-        self ? 'bg-mention text-mention-fg' : tone === 'accent' ? 'bg-accent-soft text-accent-text' : 'bg-hover text-fg-muted'
-      )}
+    <Box
+      component="span"
+      sx={(theme) => ({
+        mx: '2px',
+        display: 'inline-flex',
+        alignItems: 'center',
+        borderRadius: '4px',
+        px: '4px',
+        py: '2px',
+        fontSize: '0.9em',
+        fontWeight: 500,
+        lineHeight: 1.2,
+        bgcolor: self
+          ? theme.palette.mode === 'dark'
+            ? 'rgba(240, 169, 59, 0.2)'
+            : '#fff6d6'
+          : tone === 'accent'
+            ? theme.palette.action.selected
+            : theme.palette.action.hover,
+        color: self
+          ? theme.palette.warning.main
+          : tone === 'accent'
+            ? theme.palette.primary.main
+            : theme.palette.text.secondary
+      })}
     >
       {label}
-    </span>
+    </Box>
   )
 }
 
@@ -76,9 +146,9 @@ function renderSlack(blocks: SlackBlock[], emoji?: SlackEmojiMap): ReactNode {
     if (b.t === 'pre') return <pre key={i}>{b.v}</pre>
     if (b.t === 'quote') return <blockquote key={i}>{renderSlackInline(b.c, emoji)}</blockquote>
     return (
-      <p key={i} className="my-0 [&+p]:mt-1.5">
+      <Box component="p" key={i} sx={{ m: 0, '& + p': { mt: 1 } }}>
         {renderSlackInline(b.c, emoji)}
-      </p>
+      </Box>
     )
   })
 }
@@ -91,7 +161,7 @@ function renderSlackInline(nodes: SlackInline[], emoji?: SlackEmojiMap): ReactNo
       case 'br':
         return <br key={i} />
       case 'bold':
-        return <strong key={i} className="font-semibold">{renderSlackInline(n.c, emoji)}</strong>
+        return <strong key={i}>{renderSlackInline(n.c, emoji)}</strong>
       case 'italic':
         return <em key={i}>{renderSlackInline(n.c, emoji)}</em>
       case 'strike':
@@ -114,7 +184,13 @@ function renderSlackInline(nodes: SlackInline[], emoji?: SlackEmojiMap): ReactNo
 
 export function Emoji({ name, map }: { name: string; map?: SlackEmojiMap }) {
   const resolved = resolveEmoji(name, map)
-  if (!resolved) return <span className="text-fg-subtle">:{name}:</span>
+  if (!resolved) {
+    return (
+      <Box component="span" sx={{ color: 'text.disabled' }}>
+        :{name}:
+      </Box>
+    )
+  }
   if (resolved.kind === 'image') {
     return <img className="emoji-img" src={resolved.url} alt={`:${name}:`} title={`:${name}:`} draggable={false} />
   }
@@ -137,47 +213,68 @@ function renderChatwork(nodes: CwNode[]): ReactNode {
       case 'person':
         return null
       case 'hr':
-        return <hr key={i} className="my-2 border-line" />
+        return <Divider key={i} sx={{ my: 1 }} />
       case 'code':
         return <pre key={i}>{n.v}</pre>
       case 'title':
         return (
-          <div key={i} className="mb-1 font-semibold text-fg">
+          <Typography key={i} variant="body1" sx={{ mb: 1, fontWeight: 600 }}>
             {renderChatwork(n.c)}
-          </div>
+          </Typography>
         )
       case 'info':
         return (
-          <div key={i} className="my-1.5 rounded-lg border border-line bg-sunken px-3 py-2">
+          <Paper
+            key={i}
+            variant="outlined"
+            sx={(theme) => ({
+              my: 1,
+              px: 2,
+              py: 1,
+              bgcolor: theme.palette.mode === 'dark' ? '#12151a' : '#f6f7f9'
+            })}
+          >
             {renderChatwork(n.c)}
-          </div>
+          </Paper>
         )
       case 'quote':
         return (
           <blockquote key={i}>
-            <div className="mb-0.5 flex items-center gap-1 text-[11px] text-fg-subtle">
-              <Quote className="size-3" />
-              引用{n.time ? ` · ${formatMessageTime(n.time)}` : ''}
-            </div>
+            <Stack direction="row" spacing={0.5} sx={{ mb: 0.5, alignItems: 'center', color: 'text.disabled', fontSize: '12px' }}>
+              <Quote size={12} />
+              <span>引用{n.time ? ` · ${formatMessageTime(n.time)}` : ''}</span>
+            </Stack>
             {renderChatwork(n.c)}
           </blockquote>
         )
       case 'task':
         return (
-          <div key={i} className="my-1.5 flex gap-2 rounded-lg border border-line bg-sunken px-3 py-2">
-            <CircleCheck className="mt-0.5 size-4 shrink-0 text-fg-subtle" />
-            <div className="min-w-0">{renderChatwork(n.c)}</div>
-          </div>
+          <Paper
+            key={i}
+            variant="outlined"
+            sx={(theme) => ({
+              my: 1,
+              px: 2,
+              py: 1,
+              display: 'flex',
+              gap: 1,
+              bgcolor: theme.palette.mode === 'dark' ? '#12151a' : '#f6f7f9'
+            })}
+          >
+            <CircleCheck size={16} />
+            <Box sx={{ minWidth: 0 }}>{renderChatwork(n.c)}</Box>
+          </Paper>
         )
       case 'file':
         return (
-          <span
+          <Chip
             key={i}
-            className="my-0.5 mr-1 inline-flex items-center gap-1.5 rounded-md border border-line bg-sunken px-2 py-1 text-[12px] text-fg-muted"
-          >
-            <Paperclip className="size-3.5" />
-            {n.name}
-          </span>
+            size="small"
+            variant="outlined"
+            icon={<Paperclip size={12} />}
+            label={n.name}
+            sx={{ my: 0.5, mr: 0.5, fontSize: '12px', color: 'text.secondary' }}
+          />
         )
     }
   })

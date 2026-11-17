@@ -1,27 +1,34 @@
-import { Suspense, useEffect } from 'react'
+import { Suspense, useEffect, useState } from 'react'
 import { Sparkles } from 'lucide-react'
 import { actions, useAppStore } from '@omni-desk/client'
 import { routes, type Route } from '@omni-desk/contracts'
-import { Button, SkeletonList } from '@omni-desk/ui'
+import { AppThemeProvider, Box, Button, SkeletonList, Stack, Typography, type ColorMode } from '@omni-desk/ui'
 import { FeatureBoundary } from './FeatureBoundary'
 import { features } from './features'
 import { Sidebar } from './Sidebar'
 
 const navigate = (to: Route): void => actions.navigate(to)
 
-/** テーマ設定を <html class="dark"> に反映する */
-function useThemeClass(): void {
+/** テーマ設定からライト/ダークモードを解決し <html class="dark"> とも同期する */
+function useColorMode(): ColorMode {
   const theme = useAppStore((s) => s.settings?.theme ?? 'system')
+  const [systemDark, setSystemDark] = useState(() => window.matchMedia('(prefers-color-scheme: dark)').matches)
+
   useEffect(() => {
     const media = window.matchMedia('(prefers-color-scheme: dark)')
-    const apply = (): void => {
-      const dark = theme === 'dark' || (theme === 'system' && media.matches)
-      document.documentElement.classList.toggle('dark', dark)
-    }
-    apply()
-    media.addEventListener('change', apply)
-    return () => media.removeEventListener('change', apply)
-  }, [theme])
+    setSystemDark(media.matches)
+    const onChange = (): void => setSystemDark(media.matches)
+    media.addEventListener('change', onChange)
+    return () => media.removeEventListener('change', onChange)
+  }, [])
+
+  const mode: ColorMode = theme === 'dark' || (theme === 'system' && systemDark) ? 'dark' : 'light'
+
+  useEffect(() => {
+    document.documentElement.classList.toggle('dark', mode === 'dark')
+  }, [mode])
+
+  return mode
 }
 
 function DemoBanner({ onOpenSettings }: { onOpenSettings: () => void }) {
@@ -29,16 +36,28 @@ function DemoBanner({ onOpenSettings }: { onOpenSettings: () => void }) {
   if (!settings?.demoActive) return null
   const noneConnected = !settings.slack && !settings.chatwork
   return (
-    <div className="drag flex shrink-0 items-center gap-2.5 border-b border-warning/25 bg-warning-soft px-5 py-2 text-[12.5px]">
-      <Sparkles className="size-4 shrink-0 text-warning" />
-      <p className="flex-1 text-fg">
-        <b>デモデータを表示中</b>
-        <span className="text-fg-muted">
+    <Stack
+      direction="row"
+      spacing={2}
+      className="drag"
+      sx={(theme) => ({
+        flexShrink: 0,
+        alignItems: 'center',
+        borderBottom: `1px solid ${theme.palette.divider}`,
+        bgcolor: theme.palette.mode === 'dark' ? 'rgba(240, 169, 59, 0.14)' : '#fff4e0',
+        px: 3,
+        py: 1
+      })}
+    >
+      <Sparkles size={16} color="#b86e00" />
+      <Typography variant="body2" sx={{ flex: 1, fontSize: '12px' }}>
+        <strong>デモデータを表示中</strong>
+        <Box component="span" sx={{ color: 'text.secondary' }}>
           {noneConnected
             ? ' — 設定から Slack / Chatwork を接続すると実際のデータに切り替わります'
             : ' — 設定でデモ表示がオンになっています'}
-        </span>
-      </p>
+        </Box>
+      </Typography>
       {noneConnected ? (
         <Button size="sm" onClick={onOpenSettings}>
           接続する
@@ -48,7 +67,7 @@ function DemoBanner({ onOpenSettings }: { onOpenSettings: () => void }) {
           実データに戻す
         </Button>
       )}
-    </div>
+    </Stack>
   )
 }
 
@@ -59,33 +78,36 @@ function DemoBanner({ onOpenSettings }: { onOpenSettings: () => void }) {
 export function App() {
   const hydrated = useAppStore((s) => s.hydrated)
   const route = useAppStore((s) => s.ui.route)
-  useThemeClass()
-
-  // メインプロセスから初期状態が届くまでは何も描画しない（通常は一瞬）
-  if (!hydrated) return <div className="h-full bg-canvas" />
+  const mode = useColorMode()
 
   const feature = features.find((f) => f.id === route.feature) ?? features[0]
   const View = feature.View
 
   return (
-    <div className="flex h-full">
-      <Sidebar features={features} route={route} navigate={navigate} />
-      <main className="flex min-w-0 flex-1 flex-col bg-canvas">
-        <DemoBanner onOpenSettings={() => navigate(routes.settings())} />
-        <div key={feature.id} className="animate-fade-in min-h-0 flex-1">
-          <FeatureBoundary featureId={feature.id}>
-            <Suspense
-              fallback={
-                <div className="p-8">
-                  <SkeletonList rows={6} />
-                </div>
-              }
-            >
-              <View route={route} navigate={navigate} />
-            </Suspense>
-          </FeatureBoundary>
-        </div>
-      </main>
-    </div>
+    <AppThemeProvider mode={mode}>
+      {!hydrated ? (
+        <Box sx={{ height: '100%', bgcolor: 'background.default' }} />
+      ) : (
+        <Stack direction="row" sx={{ height: '100%' }}>
+          <Sidebar features={features} route={route} mode={mode} navigate={navigate} />
+          <Stack component="main" sx={{ minWidth: 0, flex: 1, bgcolor: 'background.default' }}>
+            <DemoBanner onOpenSettings={() => navigate(routes.settings())} />
+            <Box key={feature.id} sx={{ minHeight: 0, flex: 1, display: 'flex', flexDirection: 'column' }}>
+              <FeatureBoundary featureId={feature.id}>
+                <Suspense
+                  fallback={
+                    <Box sx={{ p: 4 }}>
+                      <SkeletonList rows={6} />
+                    </Box>
+                  }
+                >
+                  <View route={route} navigate={navigate} />
+                </Suspense>
+              </FeatureBoundary>
+            </Box>
+          </Stack>
+        </Stack>
+      )}
+    </AppThemeProvider>
   )
 }

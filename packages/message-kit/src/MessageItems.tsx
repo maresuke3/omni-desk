@@ -10,17 +10,16 @@ import {
   useAsyncAction,
   useSlackEmoji
 } from '@omni-desk/client'
-import { Avatar, cn, IconButton } from '@omni-desk/ui'
+import { Avatar, Box, Chip, IconButton, Paper, Stack, Typography } from '@omni-desk/ui'
 import { Emoji, RichText } from './RichText'
 import { formatMessageTime } from './time'
 
-export function ConversationKindIcon({ kind, className }: { kind: ConversationKind; className?: string }) {
-  const cls = cn('size-3.5 shrink-0', className)
-  if (kind === 'private') return <Lock className={cls} />
-  if (kind === 'dm') return <User className={cls} />
-  if (kind === 'group') return <Users className={cls} />
-  if (kind === 'my') return <AtSign className={cls} />
-  return <Hash className={cls} />
+export function ConversationKindIcon({ kind }: { kind: ConversationKind; className?: string }) {
+  if (kind === 'private') return <Lock size={16} />
+  if (kind === 'dm') return <User size={16} />
+  if (kind === 'group') return <Users size={16} />
+  if (kind === 'my') return <AtSign size={16} />
+  return <Hash size={16} />
 }
 
 /** 添付ファイル・リアクション・スレッドの返信数 */
@@ -29,32 +28,40 @@ export function MessageExtras({ message }: { message: Message }) {
   const hasExtras = message.reactions?.length || message.files?.length || message.replyCount
   if (!hasExtras) return null
   return (
-    <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+    <Stack direction="row" spacing={1} sx={{ mt: 1, flexWrap: 'wrap', alignItems: 'center', rowGap: 1 }}>
       {message.files?.map((f, i) => (
-        <span
+        <Chip
           key={`f${i}`}
-          className="inline-flex items-center gap-1.5 rounded-md border border-line bg-sunken px-2 py-0.5 text-[12px] text-fg-muted"
-        >
-          <Paperclip className="size-3.5" />
-          {f.name}
-        </span>
+          size="small"
+          variant="outlined"
+          icon={<Paperclip size={12} />}
+          label={f.name}
+          sx={{ fontSize: '12px', color: 'text.secondary' }}
+        />
       ))}
       {message.reactions?.map((r) => (
-        <span
+        <Chip
           key={r.name}
-          className="inline-flex h-6 items-center gap-1 rounded-full border border-line bg-sunken px-2 text-[12px]"
-        >
-          <Emoji name={r.name} map={emoji} />
-          <span className="tabular-nums text-fg-muted">{r.count}</span>
-        </span>
+          size="small"
+          variant="outlined"
+          label={
+            <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
+              <Emoji name={r.name} map={emoji} />
+              <Box component="span" sx={{ fontVariantNumeric: 'tabular-nums', color: 'text.secondary' }}>
+                {r.count}
+              </Box>
+            </Stack>
+          }
+          sx={{ borderRadius: 999, fontSize: '12px' }}
+        />
       ))}
       {!!message.replyCount && (
-        <span className="inline-flex items-center gap-1 text-[12px] font-medium text-accent-text">
-          <MessageCircle className="size-3.5" />
-          {message.replyCount}件の返信
-        </span>
+        <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center', color: 'primary.main', fontSize: '12px', fontWeight: 500 }}>
+          <MessageCircle size={12} />
+          <span>{message.replyCount}件の返信</span>
+        </Stack>
       )}
-    </div>
+    </Stack>
   )
 }
 
@@ -79,9 +86,8 @@ export function HideSenderButton({ message }: { message: Message }) {
       label={toggle.error ? `${label}（失敗しました：${toggle.error.message}）` : label}
       onClick={() => void toggle.run()}
       disabled={toggle.pending}
-      className={cn(toggle.error && 'text-danger')}
     >
-      {hidden ? <Eye className="size-4" /> : <EyeOff className="size-4" />}
+      {hidden ? <Eye size={16} /> : <EyeOff size={16} />}
     </IconButton>
   )
 }
@@ -93,36 +99,88 @@ export function HideSenderButton({ message }: { message: Message }) {
 export function ChatMessage({ message, compact }: { message: Message; compact: boolean }) {
   const own = useIsOwn(message)
   return (
-    <div
-      className={cn(
-        'group relative flex gap-3 px-6 transition-colors hover:bg-hover/60',
-        compact ? 'py-0.5' : 'pt-2.5 pb-0.5',
-        message.isMention && 'bg-mention/50 hover:bg-mention/70 shadow-[inset_3px_0_0_var(--color-warning)]'
-      )}
+    <Stack
+      direction="row"
+      spacing={2}
+      sx={(theme) => ({
+        position: 'relative',
+        px: 3,
+        py: compact ? 0.5 : 1,
+        transition: 'background-color 120ms ease',
+        bgcolor: message.isMention
+          ? theme.palette.mode === 'dark'
+            ? 'rgba(240, 169, 59, 0.1)'
+            : 'rgba(255, 246, 214, 0.5)'
+          : 'transparent',
+        boxShadow: message.isMention ? `inset 3px 0 0 ${theme.palette.warning.main}` : 'none',
+        '&:hover': {
+          bgcolor: message.isMention
+            ? theme.palette.mode === 'dark'
+              ? 'rgba(240, 169, 59, 0.16)'
+              : 'rgba(255, 246, 214, 0.8)'
+            : theme.palette.action.hover
+        },
+        '&:hover .msg-actions': {
+          display: 'flex'
+        },
+        '&:hover .msg-compact-time': {
+          opacity: 1
+        }
+      })}
     >
-      <div className="w-9 shrink-0">
+      <Box sx={{ width: 32, flexShrink: 0 }}>
         {compact ? (
-          <span className="block pt-0.5 text-right text-[10px] text-fg-subtle opacity-0 group-hover:opacity-100">
+          <Typography
+            className="msg-compact-time"
+            variant="caption"
+            color="text.disabled"
+            sx={{ display: 'block', pt: 0.5, textAlign: 'right', opacity: 0, transition: 'opacity 120ms' }}
+          >
             {new Date(message.createdAt).toLocaleTimeString('ja-JP', { hour: 'numeric', minute: '2-digit' })}
-          </span>
+          </Typography>
         ) : (
-          <Avatar name={message.author.name} url={message.author.avatarUrl} size={36} />
+          <Avatar name={message.author.name} url={message.author.avatarUrl} size={32} />
         )}
-      </div>
-      <div className="min-w-0 flex-1 pb-1">
+      </Box>
+      <Box sx={{ minWidth: 0, flex: 1, pb: 0.5 }}>
         {!compact && (
-          <div className="flex items-baseline gap-2">
-            <span className="font-semibold">{message.author.name}</span>
-            <span className="text-[11.5px] text-fg-subtle">{formatMessageTime(message.createdAt)}</span>
-            {message.editedAt && <span className="text-[11px] text-fg-subtle">（編集済み）</span>}
-            {message.isUnread && <span className="size-1.5 self-center rounded-full bg-accent" />}
-          </div>
+          <Stack direction="row" spacing={1} sx={{ alignItems: 'baseline' }}>
+            <Typography variant="body1" sx={{ fontWeight: 600 }}>
+              {message.author.name}
+            </Typography>
+            <Typography variant="caption" color="text.disabled">
+              {formatMessageTime(message.createdAt)}
+            </Typography>
+            {message.editedAt && (
+              <Typography variant="caption" color="text.disabled">
+                （編集済み）
+              </Typography>
+            )}
+            {message.isUnread && (
+              <Box
+                component="span"
+                sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: 'primary.main', alignSelf: 'center' }}
+              />
+            )}
+          </Stack>
         )}
-        <RichText text={message.text} format={message.format} className="leading-relaxed" />
+        <RichText text={message.text} format={message.format} />
         <MessageExtras message={message} />
-      </div>
+      </Box>
       {(!own || message.permalink) && (
-        <div className="absolute top-1.5 right-4 hidden items-center rounded-md border border-line bg-panel shadow-card group-hover:flex">
+        <Paper
+          variant="outlined"
+          className="msg-actions"
+          sx={{
+            position: 'absolute',
+            top: 8,
+            right: 16,
+            display: 'none',
+            alignItems: 'center',
+            borderRadius: 1,
+            boxShadow: 1
+          }}
+        >
           {/*
            * TODO(reply-per-message): メッセージごとの返信（要望があれば実装する）
            * - ここに返信ボタンを置き、押したら会話画面下部の入力欄（features/conversations の ReplyComposer）に返信先をセットする
@@ -133,11 +191,11 @@ export function ChatMessage({ message, compact }: { message: Message; compact: b
           {!own && <HideSenderButton message={message} />}
           {message.permalink && (
             <IconButton label="元のメッセージを開く" onClick={() => openExternal(message.permalink)}>
-              <ArrowUpRight className="size-4" />
+              <ArrowUpRight size={16} />
             </IconButton>
           )}
-        </div>
+        </Paper>
       )}
-    </div>
+    </Stack>
   )
 }

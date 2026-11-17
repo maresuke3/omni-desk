@@ -3,13 +3,20 @@ import { MessageSquarePlus, Plus, Ticket } from 'lucide-react'
 import { actions, openExternal, useAsyncAction, useKnowledge } from '@omni-desk/client'
 import type { JiraIssue } from '@omni-desk/contracts'
 import { formatMessageTime } from '@omni-desk/message-kit'
-import { Button, EmptyState, cn } from '@omni-desk/ui'
-
-const JIRA_CATEGORY_STYLE: Record<JiraIssue['statusCategory'], string> = {
-  todo: 'bg-sunken text-fg-muted',
-  in_progress: 'bg-accent/15 text-accent-text',
-  done: 'bg-success-soft text-success'
-}
+import {
+  Alert,
+  Box,
+  Button,
+  Card,
+  Chip,
+  Divider,
+  EmptyState,
+  MenuItem,
+  Paper,
+  Stack,
+  TextField,
+  Typography
+} from '@omni-desk/ui'
 
 const DEFAULT_ISSUE_TYPES = ['Task', 'Story', 'Bug', 'Epic', 'Sub-task'] as const
 
@@ -65,9 +72,10 @@ export function CreateJiraPanel({ onClose }: { onClose: () => void }) {
   const canSubmit = Boolean(projectKey && issueType && summary.trim() && (!isSubtask || parent.trim()))
 
   return (
-    <form
-      className="card space-y-3 p-4"
-      onSubmit={(e) => {
+    <Card
+      component="form"
+      sx={{ p: 2, display: 'flex', flexDirection: 'column', gap: 2 }}
+      onSubmit={(e: React.FormEvent) => {
         e.preventDefault()
         if (!canSubmit) return
         setJsonError(null)
@@ -106,139 +114,134 @@ export function CreateJiraPanel({ onClose }: { onClose: () => void }) {
           })
       }}
     >
-      <div className="flex items-center justify-between">
-        <h3 className="text-[13.5px] font-semibold">新しい Jira チケットを作成</h3>
-        <button type="button" onClick={onClose} className="text-[12px] text-fg-subtle hover:text-fg">
+      <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between' }}>
+        <Typography variant="body1" sx={{ fontWeight: 600 }}>
+          新しい Jira チケットを作成
+        </Typography>
+        <Button size="sm" variant="ghost" onClick={onClose}>
           閉じる
-        </button>
-      </div>
-      <div className="grid gap-3 sm:grid-cols-6">
-        <select
-          value={selected}
-          onChange={(e) => setSelected(e.target.value)}
-          className="h-9 rounded-lg border border-line bg-sunken px-3 text-[12.5px] outline-none focus:border-accent focus:bg-panel sm:col-span-2"
-        >
+        </Button>
+      </Stack>
+
+      <Box sx={{ display: 'grid', gap: 2, gridTemplateColumns: { xs: '1fr', sm: '2fr 1fr 3fr' } }}>
+        <TextField select label="プロジェクト" value={selected} onChange={(e) => setSelected(e.target.value)} fullWidth>
           {projects.map((p) => (
-            <option key={p.key} value={p.key}>
+            <MenuItem key={p.key} value={p.key}>
               {p.name !== p.key ? `${p.key} — ${p.name}` : p.key}
-            </option>
+            </MenuItem>
           ))}
-          <option value="__custom__">その他のプロジェクト…</option>
-        </select>
-        <select
-          value={selectedType}
-          onChange={(e) => setSelectedType(e.target.value)}
-          className="h-9 rounded-lg border border-line bg-sunken px-3 text-[12.5px] outline-none focus:border-accent focus:bg-panel sm:col-span-1"
-        >
+          <MenuItem value="__custom__">その他のプロジェクト…</MenuItem>
+        </TextField>
+        <TextField select label="種別" value={selectedType} onChange={(e) => setSelectedType(e.target.value)} fullWidth>
           {issueTypeOptions.map((t) => (
-            <option key={t} value={t}>
+            <MenuItem key={t} value={t}>
               {t}
-            </option>
+            </MenuItem>
           ))}
-          <option value="__custom__">その他…</option>
-        </select>
-        <input
-          type="text"
+          <MenuItem value="__custom__">その他…</MenuItem>
+        </TextField>
+        <TextField
+          label="件名（必須）"
           value={summary}
           onChange={(e) => setSummary(e.target.value)}
           placeholder="件名（必須）"
-          className="h-9 rounded-lg border border-line bg-sunken px-3 text-[12.5px] outline-none focus:border-accent focus:bg-panel sm:col-span-3"
+          fullWidth
         />
-      </div>
+      </Box>
+
       {(selected === '__custom__' || selectedType === '__custom__') && (
-        <div className="grid gap-3 sm:grid-cols-2">
+        <Box sx={{ display: 'grid', gap: 2, gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' } }}>
           {selected === '__custom__' && (
-            <input
-              type="text"
+            <TextField
               value={customKey}
               onChange={(e) => setCustomKey(e.target.value.toUpperCase())}
               placeholder="プロジェクトキー（例: OMNI）"
-              className="h-9 rounded-lg border border-line bg-sunken px-3 text-[12.5px] outline-none focus:border-accent focus:bg-panel"
+              fullWidth
             />
           )}
           {selectedType === '__custom__' && (
-            <input
-              type="text"
+            <TextField
               value={customType}
               onChange={(e) => setCustomType(e.target.value)}
-              placeholder="チケットタイプ名（大文字小文字区別、例: Incident）"
-              className="h-9 rounded-lg border border-line bg-sunken px-3 text-[12.5px] outline-none focus:border-accent focus:bg-panel"
+              placeholder="チケットタイプ名（例: Incident）"
+              fullWidth
             />
           )}
-        </div>
+        </Box>
       )}
-      <div className="grid gap-3 sm:grid-cols-3">
-        <select
+
+      <Box sx={{ display: 'grid', gap: 2, gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr 1fr' } }}>
+        <TextField
+          select
+          label="担当者"
           value={assigneeMode}
           onChange={(e) => setAssigneeMode(e.target.value as typeof assigneeMode)}
-          className="h-9 rounded-lg border border-line bg-sunken px-3 text-[12.5px] outline-none focus:border-accent focus:bg-panel"
+          fullWidth
         >
-          <option value="">担当者: 未割り当て</option>
-          <option value="@me">担当者: 自分（@me）</option>
-          <option value="default">担当者: プロジェクト既定</option>
-          <option value="__custom__">担当者: メール / ID を指定…</option>
-        </select>
-        <input
-          type="text"
+          <MenuItem value="">未割り当て</MenuItem>
+          <MenuItem value="@me">自分（@me）</MenuItem>
+          <MenuItem value="default">プロジェクト既定</MenuItem>
+          <MenuItem value="__custom__">メール / ID を指定…</MenuItem>
+        </TextField>
+        <TextField
+          label="ラベル"
           value={labelsText}
           onChange={(e) => setLabelsText(e.target.value)}
-          placeholder="ラベル（カンマ区切り、例: bug,cli）"
-          className="h-9 rounded-lg border border-line bg-sunken px-3 text-[12.5px] outline-none focus:border-accent focus:bg-panel"
+          placeholder="bug,cli"
+          fullWidth
         />
-        <input
-          type="text"
+        <TextField
+          label={isSubtask ? '親チケットキー（必須）' : '親チケット / Epic キー（任意）'}
           value={parent}
           onChange={(e) => setParent(e.target.value.toUpperCase())}
-          placeholder={isSubtask ? '親チケットキー（Sub-task は必須、例: OMNI-101）' : '親チケット / Epic キー（任意）'}
-          className={cn(
-            'h-9 rounded-lg border bg-sunken px-3 text-[12.5px] outline-none focus:border-accent focus:bg-panel',
-            isSubtask && !parent.trim() ? 'border-warning' : 'border-line'
-          )}
+          placeholder="例: OMNI-101"
+          error={isSubtask && !parent.trim()}
+          fullWidth
         />
-      </div>
+      </Box>
+
       {assigneeMode === '__custom__' && (
-        <input
-          type="text"
+        <TextField
           value={customAssignee}
           onChange={(e) => setCustomAssignee(e.target.value)}
           placeholder="担当者のメールアドレスまたは Atlassian Account ID"
-          className="h-9 w-full rounded-lg border border-line bg-sunken px-3 text-[12.5px] outline-none focus:border-accent focus:bg-panel"
+          fullWidth
         />
       )}
-      <textarea
+
+      <TextField
+        multiline
         rows={3}
         value={description}
         onChange={(e) => setDescription(e.target.value)}
         placeholder={DESCRIPTION_PLACEHOLDERS[issueType] ?? '詳細説明（任意）'}
-        className="w-full rounded-lg border border-line bg-sunken p-3 text-[12.5px] outline-none focus:border-accent focus:bg-panel"
+        fullWidth
       />
-      <div>
-        <button
-          type="button"
-          onClick={() => setShowCustomAttrs((v) => !v)}
-          className="text-[11.5px] text-fg-subtle hover:text-fg"
-        >
+
+      <Box>
+        <Button size="sm" variant="ghost" onClick={() => setShowCustomAttrs((v) => !v)}>
           {showCustomAttrs ? 'カスタムフィールド設定を隠す' : 'カスタムフィールド（additionalAttributes）を指定…'}
-        </button>
+        </Button>
         {showCustomAttrs && (
-          <textarea
+          <TextField
+            multiline
             rows={3}
             value={customAttrsJson}
             onChange={(e) => setCustomAttrsJson(e.target.value)}
             placeholder={'{\n  "customfield_10000": { "value": "High" }\n}'}
-            className="mt-2 w-full rounded-lg border border-line bg-sunken p-3 font-mono text-[12px] outline-none focus:border-accent focus:bg-panel"
+            fullWidth
+            sx={{ mt: 1 }}
           />
         )}
-      </div>
-      <div className="flex flex-wrap items-center gap-3">
+      </Box>
+
+      <Stack direction="row" spacing={2} sx={{ flexWrap: 'wrap', alignItems: 'center' }}>
         <Button type="submit" variant="primary" size="sm" loading={create.pending} disabled={!canSubmit}>
           作成する
         </Button>
-        {(jsonError || create.error) && (
-          <span className="text-[12px] text-danger">{jsonError || create.error?.message}</span>
-        )}
-      </div>
-    </form>
+        {(jsonError || create.error) && <Alert severity="error">{jsonError || create.error?.message}</Alert>}
+      </Stack>
+    </Card>
   )
 }
 
@@ -258,131 +261,147 @@ export function JiraSection({
   const addComment = useAsyncAction(actions.addJiraComment)
 
   return (
-    <section>
-      <div className="mb-2 flex items-center justify-between px-1">
-        <div className="flex items-center gap-2">
-          <Ticket className="size-4 text-accent-text" />
-          <h3 className="text-[12.5px] font-semibold text-fg">Jira チケット</h3>
-          <span className="text-[11.5px] text-fg-subtle tabular-nums">{items.length}</span>
-        </div>
+    <Box>
+      <Stack direction="row" sx={{ mb: 1, alignItems: 'center', justifyContent: 'space-between', px: 0.5 }}>
+        <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+          <Ticket size={16} />
+          <Typography variant="body2" sx={{ fontWeight: 600 }}>
+            Jira チケット
+          </Typography>
+          <Typography variant="caption" color="text.disabled" sx={{ fontVariantNumeric: 'tabular-nums' }}>
+            {items.length}
+          </Typography>
+        </Stack>
         {canEdit && onOpenCreate && (
-          <button
-            type="button"
-            onClick={onOpenCreate}
-            className="inline-flex items-center gap-1 text-[12px] font-medium text-accent-text hover:underline"
-          >
-            <Plus className="size-3.5" />
+          <Button size="sm" variant="ghost" onClick={onOpenCreate}>
+            <Plus size={16} />
             起票
-          </button>
+          </Button>
         )}
-      </div>
+      </Stack>
       {items.length === 0 ? (
-        <div className="card p-6">
-          <EmptyState icon={<Ticket className="size-5" />} title="該当する Jira チケットはありません" />
-        </div>
+        <Card sx={{ p: 3 }}>
+          <EmptyState icon={<Ticket size={24} />} title="該当する Jira チケットはありません" />
+        </Card>
       ) : (
-        <div className="card divide-y divide-line overflow-hidden">
-          {items.map((issue) => {
-            const expanded = activeKey === issue.key
-            return (
-              <div key={issue.key} className="px-4 py-3">
-                <div className="flex items-start gap-3">
-                  <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-1.5 text-[11.5px]">
-                      <button
-                        type="button"
-                        onClick={() => issue.url && openExternal(issue.url)}
-                        className="font-mono font-semibold text-accent-text hover:underline"
-                      >
-                        {issue.key}
-                      </button>
-                      {issue.issueType && (
-                        <span className="rounded bg-sunken px-1.5 py-px text-fg-muted">{issue.issueType}</span>
-                      )}
-                      <span className={cn('rounded px-1.5 py-px font-medium', JIRA_CATEGORY_STYLE[issue.statusCategory])}>
-                        {issue.status}
-                      </span>
-                      {issue.priority && <span className="text-fg-subtle">{issue.priority}</span>}
-                    </div>
-                    <p className="mt-1 text-[13px] font-medium text-fg">{issue.summary}</p>
-                    <p className="mt-0.5 text-[11.5px] text-fg-subtle">
-                      {issue.assignee ? `担当: ${issue.assignee.name} · ` : ''}
-                      {formatMessageTime(issue.updatedAt)}
-                    </p>
-                  </div>
-                  {canEdit && (
-                    <Button
-                      size="sm"
-                      onClick={() => {
-                        setActiveKey(expanded ? null : issue.key)
-                        setNextStatus('')
-                        setComment('')
-                      }}
-                    >
-                      <MessageSquarePlus className="size-3.5" />
-                      操作
-                    </Button>
-                  )}
-                </div>
-
-                {expanded && canEdit && (
-                  <div className="mt-3 space-y-2.5 rounded-lg border border-line bg-sunken p-3">
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="text"
-                        value={nextStatus}
-                        onChange={(e) => setNextStatus(e.target.value)}
-                        placeholder="ステータス変更（例: In Progress / Done）"
-                        className="h-8 flex-1 rounded-md border border-line bg-panel px-2.5 text-[12px] outline-none focus:border-accent"
-                      />
+        <Card sx={{ overflow: 'hidden' }}>
+          <Stack divider={<Divider />}>
+            {items.map((issue) => {
+              const expanded = activeKey === issue.key
+              const statusColor =
+                issue.statusCategory === 'done' ? 'success' : issue.statusCategory === 'in_progress' ? 'primary' : 'default'
+              return (
+                <Box key={issue.key} sx={{ px: 2, py: 2 }}>
+                  <Stack direction="row" spacing={2} sx={{ alignItems: 'flex-start' }}>
+                    <Box sx={{ minWidth: 0, flex: 1 }}>
+                      <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', alignItems: 'center' }}>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => issue.url && openExternal(issue.url)}
+                        >
+                          {issue.key}
+                        </Button>
+                        {issue.issueType && <Chip size="small" label={issue.issueType} />}
+                        <Chip size="small" color={statusColor} variant="outlined" label={issue.status} />
+                        {issue.priority && (
+                          <Typography variant="caption" color="text.disabled">
+                            {issue.priority}
+                          </Typography>
+                        )}
+                      </Stack>
+                      <Typography variant="body1" sx={{ mt: 0.5, fontWeight: 500 }}>
+                        {issue.summary}
+                      </Typography>
+                      <Typography variant="caption" color="text.disabled" sx={{ display: 'block', mt: 0.5 }}>
+                        {issue.assignee ? `担当: ${issue.assignee.name} · ` : ''}
+                        {formatMessageTime(issue.updatedAt)}
+                      </Typography>
+                    </Box>
+                    {canEdit && (
                       <Button
                         size="sm"
-                        loading={updateIssue.pending}
-                        disabled={!nextStatus.trim()}
-                        onClick={() =>
-                          void updateIssue.run(issue.key, { status: nextStatus.trim() }).then((ok) => {
-                            if (ok !== undefined) setNextStatus('')
-                          })
-                        }
+                        onClick={() => {
+                          setActiveKey(expanded ? null : issue.key)
+                          setNextStatus('')
+                          setComment('')
+                        }}
                       >
-                        変更
+                        <MessageSquarePlus size={16} />
+                        操作
                       </Button>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="text"
-                        value={comment}
-                        onChange={(e) => setComment(e.target.value)}
-                        placeholder="Jira にコメントを投稿..."
-                        className="h-8 flex-1 rounded-md border border-line bg-panel px-2.5 text-[12px] outline-none focus:border-accent"
-                      />
-                      <Button
-                        size="sm"
-                        variant="primary"
-                        loading={addComment.pending}
-                        disabled={!comment.trim()}
-                        onClick={() =>
-                          void addComment.run(issue.key, comment.trim()).then((ok) => {
-                            if (ok !== undefined) {
-                              setComment('')
-                              setActiveKey(null)
-                            }
-                          })
-                        }
-                      >
-                        コメント
-                      </Button>
-                    </div>
-                    {(updateIssue.error || addComment.error) && (
-                      <p className="text-[11.5px] text-danger">{(updateIssue.error ?? addComment.error)?.message}</p>
                     )}
-                  </div>
-                )}
-              </div>
-            )
-          })}
-        </div>
+                  </Stack>
+
+                  {expanded && canEdit && (
+                    <Paper
+                      variant="outlined"
+                      sx={(theme) => ({
+                        mt: 2,
+                        p: 2,
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: 1.5,
+                        bgcolor: theme.palette.mode === 'dark' ? '#12151a' : '#f6f7f9'
+                      })}
+                    >
+                      <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+                        <TextField
+                          size="small"
+                          value={nextStatus}
+                          onChange={(e) => setNextStatus(e.target.value)}
+                          placeholder="ステータス変更（例: In Progress / Done）"
+                          sx={{ flex: 1 }}
+                        />
+                        <Button
+                          size="sm"
+                          loading={updateIssue.pending}
+                          disabled={!nextStatus.trim()}
+                          onClick={() =>
+                            void updateIssue.run(issue.key, { status: nextStatus.trim() }).then((ok) => {
+                              if (ok !== undefined) setNextStatus('')
+                            })
+                          }
+                        >
+                          変更
+                        </Button>
+                      </Stack>
+                      <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+                        <TextField
+                          size="small"
+                          value={comment}
+                          onChange={(e) => setComment(e.target.value)}
+                          placeholder="Jira にコメントを投稿..."
+                          sx={{ flex: 1 }}
+                        />
+                        <Button
+                          size="sm"
+                          variant="primary"
+                          loading={addComment.pending}
+                          disabled={!comment.trim()}
+                          onClick={() =>
+                            void addComment.run(issue.key, comment.trim()).then((ok) => {
+                              if (ok !== undefined) {
+                                setComment('')
+                                setActiveKey(null)
+                              }
+                            })
+                          }
+                        >
+                          コメント
+                        </Button>
+                      </Stack>
+                      {(updateIssue.error || addComment.error) && (
+                        <Alert severity="error">{(updateIssue.error ?? addComment.error)?.message}</Alert>
+                      )}
+                    </Paper>
+                  )}
+                </Box>
+              )
+            })}
+          </Stack>
+        </Card>
       )}
-    </section>
+    </Box>
   )
 }

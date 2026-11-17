@@ -6,11 +6,13 @@
   "description": "シェル: Electron 本体（メイン・preload・レンダラーの外枠）。Feature とコネクタを登録して組み立てる",
   "main": "./out/main/index.js",
   "scripts": {
+    "predev": "node -e \"require('electron')\"",
     "dev": "electron-vite dev",
     "build": "electron-vite build",
     "start": "electron-vite preview",
     "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
-    "dist:mac": "electron-vite build && electron-builder --mac"
+    "dist:mac": "electron-vite build && electron-builder --mac",
+    "dist:win": "electron-vite build && electron-builder --win"
   },
   "devDependencies": {
     "@omni-desk/client": "workspace:*",
@@ -33,7 +35,6 @@
     "@omni-desk/feature-tasks": "workspace:*",
     "@omni-desk/message-kit": "workspace:*",
     "@omni-desk/ui": "workspace:*",
-    "@tailwindcss/vite": "catalog:",
     "@types/node": "catalog:",
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",
@@ -44,7 +45,6 @@
     "lucide-react": "catalog:",
     "react": "catalog:",
     "react-dom": "catalog:",
-    "tailwindcss": "catalog:",
     "vite": "catalog:"
   },
   "build": {
@@ -63,6 +63,13 @@
       "icon": "build/icon.png",
       "category": "public.app-category.productivity",
       "target": "dmg"
+    },
+    "win": {
+      "icon": "build/icon.png",
+      "target": [
+        "nsis",
+        "portable"
+      ]
     }
   }
 }

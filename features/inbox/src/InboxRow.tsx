@@ -13,31 +13,50 @@ import {
   RichText,
   toReplyTarget
 } from '@omni-desk/message-kit'
-import { Avatar, Button, cn, SourceMark } from '@omni-desk/ui'
+import { Avatar, Box, Button, Chip, SourceMark, Stack, Tooltip, Typography } from '@omni-desk/ui'
 import { SnoozeMenu } from './SnoozeMenu'
 import { formatUntil } from './snooze'
 
 function Kbd({ children }: { children: string }) {
   return (
-    <kbd className="ml-1 rounded border border-line bg-sunken px-1 font-sans text-[10px] font-medium text-fg-subtle">{children}</kbd>
+    <Box
+      component="kbd"
+      sx={(theme) => ({
+        ml: 0.5,
+        px: '4px',
+        borderRadius: '4px',
+        border: `1px solid ${theme.palette.divider}`,
+        fontSize: '11px',
+        fontFamily: 'inherit',
+        color: 'text.secondary'
+      })}
+    >
+      {children}
+    </Box>
   )
 }
 
 function StatusBadge({ entry, now }: { entry: InboxEntry; now: number }) {
   if (entry.status === 'snoozed' && entry.state?.until) {
     return (
-      <span className="inline-flex shrink-0 items-center gap-1 rounded-md bg-warning-soft px-1.5 py-px text-[11px] font-medium text-warning">
-        <AlarmClock className="size-3" />
-        {formatUntil(entry.state.until, now)} まで
-      </span>
+      <Chip
+        size="small"
+        color="warning"
+        variant="outlined"
+        icon={<AlarmClock size={12} />}
+        label={`${formatUntil(entry.state.until, now)} まで`}
+      />
     )
   }
   if (entry.status === 'done') {
     return (
-      <span className="inline-flex shrink-0 items-center gap-1 rounded-md bg-success-soft px-1.5 py-px text-[11px] font-medium text-success">
-        <CircleCheck className="size-3" />
-        {entry.state?.reason === 'replied' ? '返信済み' : '対応済み'}
-      </span>
+      <Chip
+        size="small"
+        color="success"
+        variant="outlined"
+        icon={<CircleCheck size={12} />}
+        label={entry.state?.reason === 'replied' ? '返信済み' : '対応済み'}
+      />
     )
   }
   return null
@@ -67,7 +86,6 @@ export const InboxRow = memo(function InboxRow({
   const preview = useMemo(() => previewText(message, emoji), [message, emoji])
   const ref = useRef<HTMLDivElement>(null)
 
-  // キーボードで選択が移ったら見える位置までスクロールする
   useEffect(() => {
     if (selected) ref.current?.scrollIntoView({ block: 'nearest' })
   }, [selected])
@@ -77,93 +95,133 @@ export const InboxRow = memo(function InboxRow({
   }
 
   return (
-    <div
+    <Box
       ref={ref}
       data-inbox-row={message.id}
       onClick={() => !selected && onSelect(message.id)}
-      className={cn(
-        'group relative border-b border-line transition-colors',
-        // 選択していない行は画面外の描画を省く（件数が多いときの軽量化）。展開中の行には付けない（中身が切れるため）
-        selected ? 'bg-panel shadow-[inset_3px_0_0_var(--color-accent)]' : 'cursor-default [content-visibility:auto] [contain-intrinsic-size:auto_64px] hover:bg-hover/60'
-      )}
+      sx={(theme) => ({
+        position: 'relative',
+        borderBottom: `1px solid ${theme.palette.divider}`,
+        transition: 'background-color 120ms',
+        bgcolor: selected ? theme.palette.background.paper : 'transparent',
+        boxShadow: selected ? `inset 3px 0 0 ${theme.palette.primary.main}` : 'none',
+        cursor: selected ? 'default' : 'pointer',
+        ...(selected
+          ? {}
+          : {
+              contentVisibility: 'auto',
+              containIntrinsicSize: 'auto 64px',
+              '&:hover': { bgcolor: theme.palette.action.hover }
+            })
+      })}
     >
-      <div className="flex items-start gap-3 px-5 py-2.5">
-        <span className={cn('mt-3 size-1.5 shrink-0 rounded-full', message.isUnread ? 'bg-accent' : 'bg-transparent')} title={message.isUnread ? '未読' : undefined} />
-        <Avatar name={message.author.name} url={message.author.avatarUrl} size={30} />
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
-            <span className={cn('truncate text-[13px]', message.isUnread ? 'font-bold' : 'font-semibold')}>{message.author.name}</span>
-            <span className="flex min-w-0 items-center gap-1 text-[11.5px] text-fg-subtle">
+      <Stack direction="row" spacing={2} sx={{ alignItems: 'flex-start', px: 3, py: 2 }}>
+        <Tooltip title={message.isUnread ? '未読' : ''}>
+          <Box
+            component="span"
+            sx={{
+              mt: 1.5,
+              width: 8,
+              height: 8,
+              flexShrink: 0,
+              borderRadius: '50%',
+              bgcolor: message.isUnread ? 'primary.main' : 'transparent'
+            }}
+          />
+        </Tooltip>
+        <Avatar name={message.author.name} url={message.author.avatarUrl} size={32} />
+        <Box sx={{ minWidth: 0, flex: 1 }}>
+          <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+            <Typography
+              variant="body1"
+              sx={{
+                fontWeight: message.isUnread ? 700 : 600,
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap'
+              }}
+            >
+              {message.author.name}
+            </Typography>
+            <Stack direction="row" spacing={0.5} sx={{ minWidth: 0, alignItems: 'center', color: 'text.disabled' }}>
               <SourceMark source={message.source} size="xs" />
-              <ConversationKindIcon kind={message.conversationKind} className="size-3" />
-              <span className="truncate">{message.conversationName}</span>
-            </span>
-            <span className="ml-auto flex shrink-0 items-center gap-2">
+              <ConversationKindIcon kind={message.conversationKind} />
+              <Typography variant="caption" sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {message.conversationName}
+              </Typography>
+            </Stack>
+            <Stack direction="row" spacing={1} sx={{ ml: 'auto !important', flexShrink: 0, alignItems: 'center' }}>
               <StatusBadge entry={entry} now={now} />
-              <span className="text-[11.5px] text-fg-subtle tabular-nums">{formatShortTime(message.createdAt, now)}</span>
-            </span>
-          </div>
-          {!selected && <p className="mt-0.5 truncate text-[12.5px] text-fg-muted">{preview}</p>}
+              <Typography variant="caption" color="text.disabled" sx={{ fontVariantNumeric: 'tabular-nums' }}>
+                {formatShortTime(message.createdAt, now)}
+              </Typography>
+            </Stack>
+          </Stack>
+          {!selected && (
+            <Typography
+              variant="body2"
+              color="text.secondary"
+              sx={{ mt: 0.5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+            >
+              {preview}
+            </Typography>
+          )}
 
           {selected && (
-            <div className="mt-1.5" onClick={(e) => e.stopPropagation()}>
-              <RichText text={message.text} format={message.format} className="text-[13px] leading-relaxed" />
+            <Box sx={{ mt: 1 }} onClick={(e) => e.stopPropagation()}>
+              <RichText text={message.text} format={message.format} />
               <MessageExtras message={message} />
 
-              <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
+              <Stack direction="row" spacing={1} sx={{ mt: 2, flexWrap: 'wrap', alignItems: 'center', rowGap: 1 }}>
                 {entry.status === 'done' ? (
                   <Button size="sm" onClick={() => setStatus('open')}>
-                    <RotateCcw className="size-3.5" />
+                    <RotateCcw size={16} />
                     未対応に戻す
                     <Kbd>U</Kbd>
                   </Button>
                 ) : (
                   <Button size="sm" variant="primary" onClick={() => setStatus('done')}>
-                    <CircleCheck className="size-3.5" />
+                    <CircleCheck size={16} />
                     対応済み
                     <Kbd>E</Kbd>
                   </Button>
                 )}
-                <Button
-                  size="sm"
-                  className={cn(snoozeOpen && 'border-accent text-accent-text')}
-                  onClick={() => actions.setUi({ inboxSnoozeFor: snoozeOpen ? null : message.id })}
-                >
-                  <AlarmClock className="size-3.5" />
+                <Button size="sm" onClick={() => actions.setUi({ inboxSnoozeFor: snoozeOpen ? null : message.id })}>
+                  <AlarmClock size={16} />
                   {entry.status === 'snoozed' ? 'あとでを変更' : 'あとで'}
                   <Kbd>S</Kbd>
                 </Button>
                 <Button size="sm" onClick={() => actions.openReply(message.id)}>
-                  <Reply className="size-3.5" />
+                  <Reply size={16} />
                   {replyLabel(message)}
                   <Kbd>R</Kbd>
                 </Button>
                 <Button size="sm" variant="ghost" onClick={() => onOpenConversation(message)}>
-                  <MessagesSquare className="size-3.5" />
+                  <MessagesSquare size={16} />
                   会話を開く
                   <Kbd>O</Kbd>
                 </Button>
-                <span className="ml-auto flex items-center gap-0.5">
+                <Stack direction="row" spacing={0.5} sx={{ ml: 'auto !important', alignItems: 'center' }}>
                   <HideSenderButton message={message} />
                   {message.permalink && (
                     <Button size="sm" variant="ghost" onClick={() => openExternal(message.permalink)} title="元のメッセージを開く">
-                      <ArrowUpRight className="size-3.5" />
+                      <ArrowUpRight size={16} />
                     </Button>
                   )}
-                </span>
-              </div>
+                </Stack>
+              </Stack>
 
               {snoozeOpen && <SnoozeMenu message={message} now={now} />}
 
               {replying && (
-                <div className="mt-3">
+                <Box sx={{ mt: 2 }}>
                   <ReplyComposer
                     composerKey={`reply:${message.id}`}
                     target={{ source: message.source, conversationId: message.conversationId, replyTo: toReplyTarget(message) }}
                     header={
                       <>
-                        <b className="font-semibold text-fg">{message.author.name}</b> さんへ{replyLabel(message)}
-                        <span className="text-fg-subtle">（送信すると対応済みになります）</span>
+                        <strong>{message.author.name}</strong> さんへ{replyLabel(message)}
+                        <span>（送信すると対応済みになります）</span>
                       </>
                     }
                     placeholder="返信を入力"
@@ -171,12 +229,12 @@ export const InboxRow = memo(function InboxRow({
                     onSent={actions.closeReply}
                     onCancel={actions.closeReply}
                   />
-                </div>
+                </Box>
               )}
-            </div>
+            </Box>
           )}
-        </div>
-      </div>
-    </div>
+        </Box>
+      </Stack>
+    </Box>
   )
 })

@@ -1,51 +1,142 @@
-import { useState, type ButtonHTMLAttributes, type ReactNode } from 'react'
-import { CircleAlert, LoaderCircle, Plug, RefreshCw } from 'lucide-react'
+import { useState, type ButtonHTMLAttributes, type ComponentProps, type ReactNode } from 'react'
+import {
+  Alert,
+  Avatar as MuiAvatar,
+  Box,
+  Button as MuiButton,
+  Card,
+  Checkbox,
+  Chip,
+  CircularProgress,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  Divider,
+  FormControlLabel,
+  IconButton as MuiIconButton,
+  InputAdornment,
+  LinearProgress,
+  ListItemButton,
+  Menu,
+  MenuItem,
+  Paper,
+  Select,
+  Skeleton,
+  Snackbar,
+  Stack,
+  Switch,
+  Tab,
+  Tabs,
+  TextField,
+  ToggleButton,
+  ToggleButtonGroup,
+  Tooltip,
+  Typography
+} from '@mui/material'
+import { CircleAlert, Plug, RefreshCw } from 'lucide-react'
 import type { Source } from '@omni-desk/contracts'
-import { cn } from './cn'
+
+// Re-export library-agnostic layout & feedback primitives wrapped from MUI
+export {
+  Alert,
+  Box,
+  Card,
+  Checkbox,
+  Chip,
+  CircularProgress,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  Divider,
+  FormControlLabel,
+  InputAdornment,
+  LinearProgress,
+  ListItemButton,
+  Menu,
+  MenuItem,
+  Paper,
+  Select,
+  Skeleton,
+  Snackbar,
+  Stack,
+  Switch,
+  Tab,
+  Tabs,
+  TextField,
+  Tooltip,
+  Typography
+}
+
+export type TextFieldProps = ComponentProps<typeof TextField>
+export type BoxProps = ComponentProps<typeof Box>
+export type StackProps = ComponentProps<typeof Stack>
 
 // ------------------------------------------------------------ source
 
 export const SOURCE_LABEL: Record<Source, string> = { slack: 'Slack', chatwork: 'Chatwork' }
 
 export function SourceMark({ source, size = 'sm' }: { source: Source; size?: 'xs' | 'sm' | 'md' }) {
-  const dims = { xs: 'size-4 text-[9px] rounded', sm: 'size-5 text-[10px] rounded-md', md: 'size-7 text-xs rounded-lg' }[size]
+  const px = size === 'xs' ? 16 : size === 'sm' ? 24 : 32
+  const fontSize = size === 'md' ? 16 : 12
   return (
-    <span
-      title={SOURCE_LABEL[source]}
-      className={cn(
-        'inline-flex shrink-0 items-center justify-center font-bold leading-none',
-        dims,
-        source === 'slack' ? 'bg-slack-soft text-slack' : 'bg-chatwork-soft text-chatwork'
-      )}
-    >
-      {source === 'slack' ? 'S' : 'C'}
-    </span>
+    <Tooltip title={SOURCE_LABEL[source]}>
+      <Box
+        component="span"
+        sx={{
+          display: 'inline-flex',
+          flexShrink: 0,
+          alignItems: 'center',
+          justifyContent: 'center',
+          width: px,
+          height: px,
+          borderRadius: 1,
+          fontSize,
+          fontWeight: 700,
+          lineHeight: 1,
+          bgcolor: source === 'slack' ? 'rgba(123, 47, 134, 0.12)' : 'rgba(223, 68, 55, 0.12)',
+          color: source === 'slack' ? '#7b2f86' : '#df4437'
+        }}
+      >
+        {source === 'slack' ? 'S' : 'C'}
+      </Box>
+    </Tooltip>
   )
 }
 
 export function SourcePill({ source }: { source: Source }) {
+  const color = source === 'slack' ? '#7b2f86' : '#df4437'
+  const bg = source === 'slack' ? 'rgba(123, 47, 134, 0.12)' : 'rgba(223, 68, 55, 0.12)'
   return (
-    <span
-      className={cn(
-        'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium',
-        source === 'slack' ? 'bg-slack-soft text-slack' : 'bg-chatwork-soft text-chatwork'
-      )}
-    >
-      <span className={cn('size-1.5 rounded-full', source === 'slack' ? 'bg-slack' : 'bg-chatwork')} />
-      {SOURCE_LABEL[source]}
-    </span>
+    <Chip
+      size="small"
+      label={
+        <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+          <Box component="span" sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: color }} />
+          <span>{SOURCE_LABEL[source]}</span>
+        </Stack>
+      }
+      sx={{
+        bgcolor: bg,
+        color,
+        fontWeight: 500,
+        border: 'none',
+        height: 24
+      }}
+    />
   )
 }
 
 // ------------------------------------------------------------ avatar
 
 const AVATAR_COLORS = [
-  'bg-[#e8eefc] text-[#3456b8] dark:bg-[#24314f] dark:text-[#a9bdf5]',
-  'bg-[#fbeae5] text-[#b34a2b] dark:bg-[#43281f] dark:text-[#f3b49f]',
-  'bg-[#e6f4ec] text-[#22744a] dark:bg-[#1d3a2b] dark:text-[#9ad8b5]',
-  'bg-[#f6eefa] text-[#7d3a9a] dark:bg-[#382545] dark:text-[#d6aee8]',
-  'bg-[#fff3dc] text-[#9a6200] dark:bg-[#3d3019] dark:text-[#f0cd8c]',
-  'bg-[#e5f4f6] text-[#1f6f7c] dark:bg-[#1b363b] dark:text-[#93d3dd]'
+  { bg: '#e8eefc', fg: '#3456b8', darkBg: '#24314f', darkFg: '#a9bdf5' },
+  { bg: '#fbeae5', fg: '#b34a2b', darkBg: '#43281f', darkFg: '#f3b49f' },
+  { bg: '#e6f4ec', fg: '#22744a', darkBg: '#1d3a2b', darkFg: '#9ad8b5' },
+  { bg: '#f6eefa', fg: '#7d3a9a', darkBg: '#382545', darkFg: '#d6aee8' },
+  { bg: '#fff3dc', fg: '#9a6200', darkBg: '#3d3019', darkFg: '#f0cd8c' },
+  { bg: '#e5f4f6', fg: '#1f6f7c', darkBg: '#1b363b', darkFg: '#93d3dd' }
 ]
 
 function hash(s: string): number {
@@ -73,63 +164,104 @@ export function Avatar({
   className?: string
 }) {
   const [failed, setFailed] = useState(false)
-  const style = { width: size, height: size, fontSize: Math.max(10, Math.round(size * 0.4)) }
-  const radius = size >= 28 ? 'rounded-lg' : 'rounded-md'
+  const palette = AVATAR_COLORS[hash(name) % AVATAR_COLORS.length]
+  const fontSize = size >= 32 ? 16 : 12
+
   if (url && !failed) {
     return (
-      <img
+      <MuiAvatar
         src={url}
         alt=""
-        draggable={false}
-        referrerPolicy="no-referrer"
-        onError={() => setFailed(true)}
-        style={style}
-        className={cn('shrink-0 object-cover', radius, className)}
+        variant="rounded"
+        className={className}
+        slotProps={{
+          img: {
+            draggable: false,
+            referrerPolicy: 'no-referrer',
+            onError: () => setFailed(true)
+          }
+        }}
+        sx={{ width: size, height: size, borderRadius: 1, flexShrink: 0 }}
       />
     )
   }
+
   return (
-    <span
-      style={style}
-      className={cn(
-        'inline-flex shrink-0 items-center justify-center font-semibold',
-        radius,
-        AVATAR_COLORS[hash(name) % AVATAR_COLORS.length],
-        className
-      )}
+    <MuiAvatar
+      variant="rounded"
+      className={className}
+      sx={(theme) => ({
+        width: size,
+        height: size,
+        borderRadius: 1,
+        flexShrink: 0,
+        fontSize,
+        fontWeight: 600,
+        bgcolor: theme.palette.mode === 'dark' ? palette.darkBg : palette.bg,
+        color: theme.palette.mode === 'dark' ? palette.darkFg : palette.fg
+      })}
     >
       {initials(name)}
-    </span>
+    </MuiAvatar>
   )
 }
 
 // ------------------------------------------------------------ buttons
 
-type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
+type ButtonProps = Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'color'> & {
   variant?: 'primary' | 'secondary' | 'ghost' | 'danger'
   size?: 'sm' | 'md'
   loading?: boolean
 }
 
-export function Button({ variant = 'secondary', size = 'md', loading, className, children, disabled, type = 'button', ...rest }: ButtonProps) {
+export function Button({
+  variant = 'secondary',
+  size = 'md',
+  loading,
+  className,
+  children,
+  disabled,
+  type = 'button',
+  ...rest
+}: ButtonProps) {
+  const muiVariant = variant === 'primary' ? 'contained' : variant === 'ghost' ? 'text' : 'outlined'
+  const muiColor = variant === 'danger' ? 'error' : 'primary'
+
   return (
-    <button
+    <MuiButton
       {...rest}
       type={type}
+      variant={muiVariant}
+      color={muiColor}
+      size={size === 'sm' ? 'small' : 'medium'}
       disabled={disabled || loading}
-      className={cn(
-        'no-drag inline-flex items-center justify-center gap-1.5 rounded-lg font-medium transition-colors disabled:opacity-50',
-        size === 'sm' ? 'h-7 px-2.5 text-xs' : 'h-8 px-3 text-[13px]',
-        variant === 'primary' && 'bg-accent text-accent-fg hover:brightness-110',
-        variant === 'secondary' && 'border border-line bg-panel text-fg hover:bg-hover',
-        variant === 'ghost' && 'text-fg-muted hover:bg-hover hover:text-fg',
-        variant === 'danger' && 'border border-line bg-panel text-danger hover:bg-danger-soft',
-        className
-      )}
+      className={className ? `no-drag ${className}` : 'no-drag'}
+      startIcon={loading ? <CircularProgress size={16} color="inherit" /> : undefined}
+      sx={(theme) => ({
+        ...(variant === 'secondary' && {
+          borderColor: theme.palette.divider,
+          color: theme.palette.text.primary,
+          bgcolor: theme.palette.background.paper,
+          '&:hover': {
+            bgcolor: theme.palette.action.hover,
+            borderColor: theme.palette.divider
+          }
+        }),
+        ...(variant === 'ghost' && {
+          color: theme.palette.text.secondary,
+          '&:hover': {
+            bgcolor: theme.palette.action.hover,
+            color: theme.palette.text.primary
+          }
+        }),
+        ...(variant === 'danger' && {
+          borderColor: theme.palette.divider,
+          bgcolor: theme.palette.background.paper
+        })
+      })}
     >
-      {loading && <LoaderCircle className="size-3.5 animate-spin" />}
       {children}
-    </button>
+    </MuiButton>
   )
 }
 
@@ -138,20 +270,27 @@ export function IconButton({
   className,
   children,
   ...rest
-}: ButtonHTMLAttributes<HTMLButtonElement> & { label: string }) {
+}: Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'color'> & { label: string }) {
   return (
-    <button
-      type="button"
-      {...rest}
-      title={label}
-      aria-label={label}
-      className={cn(
-        'no-drag inline-flex size-7 items-center justify-center rounded-md text-fg-subtle transition-colors hover:bg-hover hover:text-fg disabled:opacity-40',
-        className
-      )}
-    >
-      {children}
-    </button>
+    <Tooltip title={label}>
+      <span className="no-drag inline-flex">
+        <MuiIconButton
+          type="button"
+          {...rest}
+          aria-label={label}
+          size="small"
+          className={className}
+          sx={{
+            width: 32,
+            height: 32,
+            color: 'text.secondary',
+            '&:hover': { color: 'text.primary', bgcolor: 'action.hover' }
+          }}
+        >
+          {children}
+        </MuiIconButton>
+      </span>
+    </Tooltip>
   )
 }
 
@@ -169,27 +308,62 @@ export function Segmented<T extends string>({
   size?: 'sm' | 'md'
 }) {
   return (
-    <div className="no-drag inline-flex rounded-lg border border-line bg-sunken p-0.5">
+    <ToggleButtonGroup
+      exclusive
+      value={value}
+      onChange={(_, next: T | null) => {
+        if (next !== null) onChange(next)
+      }}
+      size="small"
+      className="no-drag"
+      sx={(theme) => ({
+        bgcolor: theme.palette.mode === 'dark' ? '#12151a' : '#f6f7f9',
+        border: `1px solid ${theme.palette.divider}`,
+        borderRadius: 1,
+        p: '4px',
+        gap: '4px',
+        '& .MuiToggleButtonGroup-grouped': {
+          border: 0,
+          borderRadius: '6px !important',
+          textTransform: 'none',
+          px: size === 'sm' ? 1 : 2,
+          py: '4px',
+          minHeight: size === 'sm' ? 24 : 32,
+          fontSize: size === 'sm' ? '12px' : '16px',
+          fontWeight: 500,
+          color: theme.palette.text.secondary,
+          gap: 1,
+          '&.Mui-selected': {
+            bgcolor: theme.palette.background.paper,
+            color: theme.palette.text.primary,
+            boxShadow: '0 1px 2px rgba(16, 24, 40, 0.08)',
+            '&:hover': {
+              bgcolor: theme.palette.background.paper
+            }
+          }
+        }
+      })}
+    >
       {options.map((o) => (
-        <button
-          key={o.value}
-          type="button"
-          onClick={() => onChange(o.value)}
-          className={cn(
-            'inline-flex items-center gap-1.5 rounded-md font-medium transition-colors',
-            size === 'sm' ? 'h-6 px-2 text-xs' : 'h-7 px-3 text-[12.5px]',
-            value === o.value ? 'bg-panel text-fg shadow-card dark:bg-line-strong' : 'text-fg-muted hover:text-fg'
-          )}
-        >
-          {o.label}
-          {o.count !== undefined && (
-            <span className={cn('tabular-nums text-[11px]', value === o.value ? 'text-fg-muted' : 'text-fg-subtle')}>
-              {o.count}
-            </span>
-          )}
-        </button>
+        <ToggleButton key={o.value} value={o.value}>
+          <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+            <span>{o.label}</span>
+            {o.count !== undefined && (
+              <Box
+                component="span"
+                sx={{
+                  fontVariantNumeric: 'tabular-nums',
+                  fontSize: '12px',
+                  color: value === o.value ? 'text.secondary' : 'text.disabled'
+                }}
+              >
+                {o.count}
+              </Box>
+            )}
+          </Stack>
+        </ToggleButton>
       ))}
-    </div>
+    </ToggleButtonGroup>
   )
 }
 
@@ -207,54 +381,117 @@ export function PageHeader({
   children?: ReactNode
 }) {
   return (
-    <header className="drag relative z-20 shrink-0 border-b border-line bg-panel/70 px-7 pt-5 pb-4 backdrop-blur">
-      <div className="flex items-end justify-between gap-4">
-        <div className="min-w-0">
-          <h1 className="text-[19px] font-semibold tracking-tight">{title}</h1>
-          {subtitle && <p className="mt-0.5 text-[12.5px] text-fg-muted">{subtitle}</p>}
-        </div>
-        {actions && <div className="no-drag flex shrink-0 items-center gap-2">{actions}</div>}
-      </div>
-      {children && <div className="no-drag mt-4">{children}</div>}
-    </header>
+    <Box
+      component="header"
+      className="drag"
+      sx={(theme) => ({
+        position: 'relative',
+        zIndex: 20,
+        flexShrink: 0,
+        borderBottom: `1px solid ${theme.palette.divider}`,
+        bgcolor: theme.palette.background.paper,
+        px: 3,
+        pt: 3,
+        pb: 2
+      })}
+    >
+      <Stack direction="row" spacing={2} sx={{ alignItems: 'flex-end', justifyContent: 'space-between' }}>
+        <Box sx={{ minWidth: 0 }}>
+          <Typography variant="h1" component="h1">
+            {title}
+          </Typography>
+          {subtitle && (
+            <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+              {subtitle}
+            </Typography>
+          )}
+        </Box>
+        {actions && (
+          <Stack direction="row" spacing={1} className="no-drag" sx={{ alignItems: 'center', flexShrink: 0 }}>
+            {actions}
+          </Stack>
+        )}
+      </Stack>
+      {children && (
+        <Box className="no-drag" sx={{ mt: 2 }}>
+          {children}
+        </Box>
+      )}
+    </Box>
   )
 }
 
 export function SectionTitle({ children, right }: { children: ReactNode; right?: ReactNode }) {
   return (
-    <div className="mb-2.5 flex items-center justify-between">
-      <h2 className="text-[13px] font-semibold text-fg">{children}</h2>
+    <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
+      <Typography variant="h2" component="h2" sx={{ fontSize: '16px', fontWeight: 600 }}>
+        {children}
+      </Typography>
       {right}
-    </div>
+    </Stack>
   )
 }
 
 export function CountBadge({ count, tone = 'accent' }: { count?: number; tone?: 'accent' | 'danger' | 'muted' }) {
   if (!count) return null
   return (
-    <span
-      className={cn(
-        'inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full px-1.5 text-[10.5px] font-semibold tabular-nums',
-        tone === 'accent' && 'bg-accent text-accent-fg',
-        tone === 'danger' && 'bg-danger text-white dark:text-canvas',
-        tone === 'muted' && 'bg-line text-fg-muted'
-      )}
-    >
-      {count > 99 ? '99+' : count}
-    </span>
+    <Chip
+      size="small"
+      label={count > 99 ? '99+' : count}
+      color={tone === 'accent' ? 'primary' : tone === 'danger' ? 'error' : 'default'}
+      sx={{
+        height: 24,
+        minWidth: 24,
+        borderRadius: 999,
+        fontSize: '12px',
+        fontWeight: 600,
+        fontVariantNumeric: 'tabular-nums',
+        '& .MuiChip-label': { px: 1 }
+      }}
+    />
   )
 }
 
 // ------------------------------------------------------------ states
 
-export function EmptyState({ icon, title, description, action }: { icon: ReactNode; title: string; description?: ReactNode; action?: ReactNode }) {
+export function EmptyState({
+  icon,
+  title,
+  description,
+  action
+}: {
+  icon: ReactNode
+  title: string
+  description?: ReactNode
+  action?: ReactNode
+}) {
   return (
-    <div className="flex flex-col items-center justify-center px-6 py-14 text-center">
-      <div className="mb-3 flex size-11 items-center justify-center rounded-xl bg-sunken text-fg-subtle">{icon}</div>
-      <p className="font-medium text-fg">{title}</p>
-      {description && <p className="mt-1 max-w-sm text-[12.5px] text-fg-muted">{description}</p>}
-      {action && <div className="mt-4">{action}</div>}
-    </div>
+    <Stack sx={{ alignItems: 'center', justifyContent: 'center', textAlign: 'center', px: 3, py: 7 }}>
+      <Box
+        sx={(theme) => ({
+          mb: 2,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          width: 48,
+          height: 48,
+          borderRadius: 2,
+          bgcolor: theme.palette.mode === 'dark' ? '#12151a' : '#f6f7f9',
+          color: 'text.disabled'
+        })}
+      >
+        {icon}
+      </Box>
+      <Typography variant="body1" sx={{ fontWeight: 500 }}>
+        {title}
+      </Typography>
+      {description && (
+        <Typography variant="body2" color="text.secondary" sx={{ mt: 1, maxWidth: 400 }}>
+          {description}
+        </Typography>
+      )}
+      {action && <Box sx={{ mt: 2 }}>{action}</Box>}
+    </Stack>
   )
 }
 
@@ -271,45 +508,40 @@ export function ErrorNotice({
   onOpenSettings?: () => void
   compact?: boolean
 }) {
-  // ApiError（@omni-desk/client）に依存しないよう code の有無で判定する
   const code = error.code
   const needsSettings = code === 'auth_error' || code === 'not_configured'
   return (
-    <div
-      className={cn(
-        'flex items-start gap-2.5 rounded-lg border border-danger/25 bg-danger-soft text-[12.5px]',
-        compact ? 'px-3 py-2' : 'px-3.5 py-3'
-      )}
-    >
-      <CircleAlert className="mt-0.5 size-4 shrink-0 text-danger" />
-      <div className="min-w-0 flex-1">
-        <p className="text-fg">
-          {source && <span className="font-semibold">{SOURCE_LABEL[source]}：</span>}
-          {error.message}
-        </p>
-      </div>
-      <div className="flex shrink-0 gap-1">
-        {needsSettings && onOpenSettings ? (
-          <Button size="sm" onClick={onOpenSettings}>
-            設定を開く
-          </Button>
-        ) : (
-          onRetry && (
-            <Button size="sm" variant="ghost" onClick={onRetry}>
-              <RefreshCw className="size-3.5" />
-              再試行
+    <Alert
+      severity="error"
+      icon={<CircleAlert size={16} />}
+      sx={{ py: compact ? 1 : 2, px: 2 }}
+      action={
+        <Stack direction="row" spacing={1}>
+          {needsSettings && onOpenSettings ? (
+            <Button size="sm" onClick={onOpenSettings}>
+              設定を開く
             </Button>
-          )
-        )}
-      </div>
-    </div>
+          ) : (
+            onRetry && (
+              <Button size="sm" variant="ghost" onClick={onRetry}>
+                <RefreshCw size={16} />
+                再試行
+              </Button>
+            )
+          )}
+        </Stack>
+      }
+    >
+      {source && <strong>{SOURCE_LABEL[source]}：</strong>}
+      {error.message}
+    </Alert>
   )
 }
 
 export function NotConnected({ source, onOpenSettings }: { source: Source; onOpenSettings: () => void }) {
   return (
     <EmptyState
-      icon={<Plug className="size-5" />}
+      icon={<Plug size={24} />}
       title={`${SOURCE_LABEL[source]} が未接続です`}
       description={`設定画面でトークンを登録すると、${SOURCE_LABEL[source]} のメッセージとタスクがここに表示されます。`}
       action={
@@ -323,16 +555,16 @@ export function NotConnected({ source, onOpenSettings }: { source: Source; onOpe
 
 export function SkeletonList({ rows = 5, avatar = true }: { rows?: number; avatar?: boolean }) {
   return (
-    <div className="space-y-4 p-1">
+    <Stack spacing={2} sx={{ p: 1 }}>
       {Array.from({ length: rows }, (_, i) => (
-        <div key={i} className="flex gap-3">
-          {avatar && <div className="skeleton size-8 shrink-0 rounded-lg" />}
-          <div className="flex-1 space-y-2 pt-0.5">
-            <div className="skeleton h-3 w-40" />
-            <div className="skeleton h-3" style={{ width: `${55 + ((i * 17) % 40)}%` }} />
-          </div>
-        </div>
+        <Stack key={i} direction="row" spacing={2} sx={{ alignItems: 'flex-start' }}>
+          {avatar && <Skeleton variant="rounded" width={32} height={32} sx={{ flexShrink: 0 }} />}
+          <Stack spacing={1} sx={{ flex: 1 }}>
+            <Skeleton variant="text" width={160} height={16} />
+            <Skeleton variant="text" width={`${55 + ((i * 17) % 40)}%`} height={16} />
+          </Stack>
+        </Stack>
       ))}
-    </div>
+    </Stack>
   )
 }

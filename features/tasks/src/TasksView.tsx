@@ -2,11 +2,22 @@ import { useState } from 'react'
 import { CircleCheckBig, Info, Plus } from 'lucide-react'
 import { routes, type Source, type Task } from '@omni-desk/contracts'
 import type { FeatureContext } from '@omni-desk/contracts/feature'
-import { TaskRow } from '@omni-desk/message-kit'
-import { Button, EmptyState, ErrorNotice, PageHeader, Segmented, SkeletonList } from '@omni-desk/ui'
-import { cn } from '@omni-desk/ui'
+import { dueInfo, DUE_GROUP_LABELS, DUE_GROUP_ORDER, TaskRow, type DueGroup } from '@omni-desk/message-kit'
+import {
+  Alert,
+  Box,
+  Button,
+  Card,
+  Divider,
+  EmptyState,
+  ErrorNotice,
+  PageHeader,
+  Segmented,
+  SkeletonList,
+  Stack,
+  Typography
+} from '@omni-desk/ui'
 import { actions, useAppStore, useKnowledge, useSettings, useUnifiedTasks } from '@omni-desk/client'
-import { dueInfo, DUE_GROUP_LABELS, DUE_GROUP_ORDER, type DueGroup } from '@omni-desk/message-kit'
 import { CreateJiraPanel, JiraSection } from './JiraSection'
 import { GitHubIssuesSection, PullRequestsSection } from './PullRequestsSection'
 
@@ -14,13 +25,13 @@ type Status = 'open' | 'done'
 type TaskArea = 'all' | 'personal' | 'jira' | 'pr'
 type PersonalSource = 'all' | Source
 
-const GROUP_ACCENT: Record<DueGroup, string> = {
-  overdue: 'text-danger',
-  today: 'text-warning',
-  tomorrow: 'text-accent-text',
-  week: 'text-fg',
-  later: 'text-fg',
-  none: 'text-fg-muted'
+const GROUP_COLOR: Record<DueGroup, string> = {
+  overdue: 'error.main',
+  today: 'warning.main',
+  tomorrow: 'primary.main',
+  week: 'text.primary',
+  later: 'text.primary',
+  none: 'text.secondary'
 }
 
 export function TasksView({ navigate }: FeatureContext) {
@@ -63,9 +74,9 @@ export function TasksView({ navigate }: FeatureContext) {
   const showPr = area === 'all' || area === 'pr'
 
   return (
-    <div className="flex h-full flex-col">
+    <Stack sx={{ height: '100%' }}>
       <PageHeader title="タスク" subtitle="マイタスク（Slack / Chatwork）・Jira チケット・GitHub PR をまとめて管理します">
-        <div className="flex flex-wrap items-center gap-2.5">
+        <Stack direction="row" spacing={2} sx={{ flexWrap: 'wrap', alignItems: 'center', rowGap: 1 }}>
           <Segmented<TaskArea>
             value={area}
             onChange={setArea}
@@ -99,25 +110,29 @@ export function TasksView({ navigate }: FeatureContext) {
           )}
           {(settings.atlassian || settings.demoActive) && (
             <Button size="sm" variant="primary" onClick={() => setShowCreateJira((v) => !v)}>
-              <Plus className="size-3.5" />
+              <Plus size={16} />
               Jira 起票
             </Button>
           )}
-        </div>
+        </Stack>
       </PageHeader>
 
-      <div className="thin-scroll flex-1 overflow-y-auto">
-        <div className="mx-auto max-w-[920px] space-y-6 px-7 py-6">
+      <Box sx={{ flex: 1, overflowY: 'auto' }}>
+        <Stack spacing={3} sx={{ mx: 'auto', maxWidth: 920, px: 3, py: 3 }}>
           {showCreateJira && <CreateJiraPanel onClose={() => setShowCreateJira(false)} />}
 
           {showPersonal && tasks.slackUnavailableReason && filter !== 'chatwork' && (
-            <div className="flex items-start gap-2.5 rounded-lg border border-line bg-panel px-3.5 py-3 text-[12.5px]">
-              <Info className="mt-0.5 size-4 shrink-0 text-accent" />
-              <p className="flex-1 text-fg-muted">{tasks.slackUnavailableReason}</p>
-              <Button size="sm" onClick={() => navigate(routes.settings())}>
-                接続方法を見る
-              </Button>
-            </div>
+            <Alert
+              severity="info"
+              icon={<Info size={16} />}
+              action={
+                <Button size="sm" onClick={() => navigate(routes.settings())}>
+                  接続方法を見る
+                </Button>
+              }
+            >
+              {tasks.slackUnavailableReason}
+            </Alert>
           )}
 
           {showPersonal &&
@@ -134,27 +149,27 @@ export function TasksView({ navigate }: FeatureContext) {
               ))}
 
           {showPersonal && (
-            <div className="space-y-4">
+            <Stack spacing={2}>
               {tasks.isLoading && visiblePersonal.length === 0 ? (
-                <div className="card p-4">
+                <Card sx={{ p: 2 }}>
                   <SkeletonList rows={4} avatar={false} />
-                </div>
+                </Card>
               ) : visiblePersonal.length === 0 ? (
                 area === 'personal' ? (
                   <EmptyState
-                    icon={<CircleCheckBig className="size-5" />}
+                    icon={<CircleCheckBig size={24} />}
                     title={status === 'open' ? '未完了のマイタスクはありません' : '完了したマイタスクはありません'}
                     description={status === 'open' ? 'お疲れさまでした！' : undefined}
                   />
                 ) : null
               ) : status === 'open' ? (
                 groups.map((g) => (
-                  <TaskGroup key={g.group} title={DUE_GROUP_LABELS[g.group]} accent={GROUP_ACCENT[g.group]} tasks={g.items} />
+                  <TaskGroup key={g.group} title={DUE_GROUP_LABELS[g.group]} color={GROUP_COLOR[g.group]} tasks={g.items} />
                 ))
               ) : (
-                <TaskGroup title="完了（マイタスク）" accent="text-success" tasks={doneSorted} />
+                <TaskGroup title="完了（マイタスク）" color="success.main" tasks={doneSorted} />
               )}
-            </div>
+            </Stack>
           )}
 
           {showJira && (area === 'jira' || visibleJira.length > 0 || Boolean(settings.atlassian)) && (
@@ -165,30 +180,41 @@ export function TasksView({ navigate }: FeatureContext) {
             />
           )}
 
-          {showPr && (area === 'pr' || openPrs.length > 0 || openGitHubIssues.length > 0 || Boolean(settings.github) || (settings.githubAccounts?.length ?? 0) > 0) && (
-            <>
-              <PullRequestsSection items={openPrs} />
-              <GitHubIssuesSection items={openGitHubIssues} />
-            </>
-          )}
-        </div>
-      </div>
-    </div>
+          {showPr &&
+            (area === 'pr' ||
+              openPrs.length > 0 ||
+              openGitHubIssues.length > 0 ||
+              Boolean(settings.github) ||
+              (settings.githubAccounts?.length ?? 0) > 0) && (
+              <>
+                <PullRequestsSection items={openPrs} />
+                <GitHubIssuesSection items={openGitHubIssues} />
+              </>
+            )}
+        </Stack>
+      </Box>
+    </Stack>
   )
 }
 
-function TaskGroup({ title, accent, tasks }: { title: string; accent: string; tasks: Task[] }) {
+function TaskGroup({ title, color, tasks }: { title: string; color: string; tasks: Task[] }) {
   return (
-    <section>
-      <div className="mb-2 flex items-center gap-2 px-1">
-        <h3 className={cn('text-[12.5px] font-semibold', accent)}>{title}</h3>
-        <span className="text-[11.5px] text-fg-subtle tabular-nums">{tasks.length}</span>
-      </div>
-      <div className="card divide-y divide-line overflow-hidden">
-        {tasks.map((t) => (
-          <TaskRow key={t.id} task={t} />
-        ))}
-      </div>
-    </section>
+    <Box>
+      <Stack direction="row" spacing={1} sx={{ mb: 1, alignItems: 'center', px: 0.5 }}>
+        <Typography variant="body2" sx={{ fontWeight: 600, color }}>
+          {title}
+        </Typography>
+        <Typography variant="caption" color="text.disabled" sx={{ fontVariantNumeric: 'tabular-nums' }}>
+          {tasks.length}
+        </Typography>
+      </Stack>
+      <Card sx={{ overflow: 'hidden' }}>
+        <Stack divider={<Divider />}>
+          {tasks.map((t) => (
+            <TaskRow key={t.id} task={t} />
+          ))}
+        </Stack>
+      </Card>
+    </Box>
   )
 }

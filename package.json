@@ -13,6 +13,7 @@
     "build": "pnpm --filter @omni-desk/desktop build",
     "start": "pnpm --filter @omni-desk/desktop start",
     "dist:mac": "pnpm --filter @omni-desk/desktop dist:mac",
+    "dist:win": "pnpm --filter @omni-desk/desktop dist:win",
     "typecheck": "pnpm -r typecheck",
     "test": "vitest run",
     "lint:boundaries": "node scripts/check-boundaries.mjs",

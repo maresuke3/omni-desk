@@ -1,8 +1,8 @@
-import { Inbox, RefreshCw } from 'lucide-react'
+import { Inbox, Moon, RefreshCw, Sun } from 'lucide-react'
 import { actions, isMac, useAppStore, useRateStatus, useSyncActivity } from '@omni-desk/client'
 import { routeMatches, type Route } from '@omni-desk/contracts'
 import type { FeatureModule, NavEntry, NavSection } from '@omni-desk/contracts/feature'
-import { cn, CountBadge } from '@omni-desk/ui'
+import { Box, Chip, CountBadge, IconButton, ListItemButton, Stack, Switch, Tooltip, Typography, type ColorMode } from '@omni-desk/ui'
 import { hhmm } from '@omni-desk/message-kit'
 
 /** バッジ・状態のフックを、定義されている項目でだけ呼ぶための小さなコンポーネント */
@@ -14,39 +14,83 @@ function Badge({ useBadge }: { useBadge: NonNullable<NavEntry['useBadge']> }) {
 function StatusDot({ useStatus }: { useStatus: NonNullable<NavEntry['useStatus']> }) {
   const status = useStatus()
   if (!status) return null
+  const label = status === 'connected' ? '接続済み' : status === 'demo' ? 'デモデータ' : '未接続'
   return (
-    <span
-      title={status === 'connected' ? '接続済み' : status === 'demo' ? 'デモデータ' : '未接続'}
-      className={cn(
-        'size-1.5 rounded-full',
-        status === 'connected' && 'bg-success',
-        status === 'demo' && 'bg-warning',
-        status === 'off' && 'bg-line-strong'
-      )}
-    />
+    <Tooltip title={label}>
+      <Box
+        component="span"
+        sx={(theme) => ({
+          width: 8,
+          height: 8,
+          borderRadius: '50%',
+          bgcolor:
+            status === 'connected'
+              ? theme.palette.success.main
+              : status === 'demo'
+                ? theme.palette.warning.main
+                : theme.palette.divider
+        })}
+      />
+    </Tooltip>
   )
 }
 
-function NavItem({ entry, active, onClick }: { entry: NavEntry; active: boolean; onClick: () => void }) {
+function NavItem({ entry, active, compact, onClick }: { entry: NavEntry; active: boolean; compact?: boolean; onClick: () => void }) {
   const Icon = entry.icon
+  const rowHeight = compact ? 32 : 40
   return (
-    <button
+    <ListItemButton
       onClick={onClick}
       disabled={entry.disabled}
-      className={cn(
-        'no-drag flex h-8 w-full items-center gap-2.5 rounded-lg px-2.5 text-[13px] transition-colors',
-        active ? 'bg-panel font-semibold text-fg shadow-card' : 'text-fg-muted hover:bg-hover hover:text-fg',
-        entry.disabled && 'pointer-events-none opacity-55'
-      )}
+      selected={active}
+      className="no-drag"
+      sx={(theme) => ({
+        borderRadius: 0,
+        px: 2,
+        py: 0,
+        minHeight: rowHeight,
+        height: rowHeight,
+        gap: 1,
+        color: active ? theme.palette.text.primary : theme.palette.text.secondary,
+        bgcolor: active ? `${theme.palette.background.paper} !important` : 'transparent',
+        boxShadow: active ? `inset 3px 0 0 ${theme.palette.primary.main}` : 'none',
+        '&:hover': {
+          bgcolor: active ? theme.palette.background.paper : theme.palette.action.hover,
+          color: theme.palette.text.primary
+        }
+      })}
     >
-      <span className={cn('flex size-5 items-center justify-center', active ? 'text-accent' : 'text-fg-subtle')}>
-        <Icon className="size-4" />
-      </span>
-      <span className="flex-1 truncate text-left">{entry.label}</span>
+      <Box
+        component="span"
+        sx={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          width: 24,
+          height: 24,
+          color: active ? 'primary.main' : 'text.disabled',
+          '& svg': { width: 16, height: 16 }
+        }}
+      >
+        <Icon />
+      </Box>
+      <Typography
+        variant="body1"
+        sx={{
+          flex: 1,
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          whiteSpace: 'nowrap',
+          fontSize: compact ? '12px' : '16px',
+          fontWeight: active ? 600 : 400
+        }}
+      >
+        {entry.label}
+      </Typography>
       {entry.useBadge && <Badge useBadge={entry.useBadge} />}
       {entry.useStatus && <StatusDot useStatus={entry.useStatus} />}
-      {entry.tag && <span className="rounded bg-hover px-1.5 py-px text-[10px] text-fg-subtle">{entry.tag}</span>}
-    </button>
+      {entry.tag && <Chip size="small" label={entry.tag} sx={{ height: 24, fontSize: '12px' }} />}
+    </ListItemButton>
   )
 }
 
@@ -55,15 +99,44 @@ function SyncStatus() {
   const rate = useRateStatus('chatwork')
   const title = rate
     ? `Chatwork API 残り ${rate.remaining} / ${rate.limit} 回（5 分）${rate.queued ? ` · 待機中 ${rate.queued} 件` : ''}`
-    : undefined
+    : ''
 
   return (
-    <div className="flex items-center justify-between rounded-lg px-2.5 py-1.5 text-[11.5px] text-fg-subtle" title={title}>
-      <span>{syncing ? '同期中…' : lastSyncedAt ? `${hhmm(lastSyncedAt)} に更新` : ''}</span>
-      <button onClick={actions.refresh} className="no-drag rounded-md p-1 hover:bg-hover hover:text-fg" title="すべて更新">
-        <RefreshCw className={cn('size-3.5', syncing && 'animate-spin')} />
-      </button>
-    </div>
+    <Tooltip title={title}>
+      <Stack direction="row" spacing={1} sx={{ alignItems: 'center', justifyContent: 'space-between', px: 1, py: 1 }}>
+        <Typography variant="caption" color="text.disabled">
+          {syncing ? '同期中…' : lastSyncedAt ? `${hhmm(lastSyncedAt)} に更新` : ''}
+        </Typography>
+        <IconButton label="すべて更新" onClick={actions.refresh}>
+          <RefreshCw size={16} style={syncing ? { animation: 'spin 1s linear infinite' } : undefined} />
+        </IconButton>
+      </Stack>
+    </Tooltip>
+  )
+}
+
+function ThemeSwitchRow({ mode }: { mode: ColorMode }) {
+  const isDark = mode === 'dark'
+  return (
+    <Stack
+      direction="row"
+      spacing={1}
+      className="no-drag"
+      sx={{ alignItems: 'center', justifyContent: 'space-between', px: 1, py: 0.5 }}
+    >
+      <Stack direction="row" spacing={1} sx={{ alignItems: 'center', color: 'text.secondary' }}>
+        {isDark ? <Moon size={16} /> : <Sun size={16} />}
+        <Typography variant="caption" color="text.secondary">
+          {isDark ? 'ダークモード' : 'ライトモード'}
+        </Typography>
+      </Stack>
+      <Switch
+        size="small"
+        checked={isDark}
+        onChange={(_, checked) => void actions.updateSettings({ theme: checked ? 'dark' : 'light' })}
+        slotProps={{ input: { 'aria-label': 'ダークモード切替' } }}
+      />
+    </Stack>
   )
 }
 
@@ -72,57 +145,95 @@ const SECTION_TITLE: Partial<Record<NavSection, string>> = { services: 'サー�
 export function Sidebar({
   features,
   route,
+  mode,
   navigate
 }: {
   features: FeatureModule[]
   route: Route
+  mode: ColorMode
   navigate: (to: Route) => void
 }) {
   const demoActive = useAppStore((s) => !!s.settings?.demoActive)
   const entries = features.flatMap((f) => f.nav)
   const section = (s: NavSection): NavEntry[] =>
     entries.filter((e) => e.section === s).sort((a, b) => a.order - b.order)
-  const renderEntries = (list: NavEntry[]) =>
+  const renderEntries = (list: NavEntry[], compact = false) =>
     list.map((entry) => (
       <NavItem
         key={entry.id}
         entry={entry}
+        compact={compact}
         active={!entry.disabled && routeMatches(route, entry.route)}
         onClick={() => navigate(entry.route)}
       />
     ))
 
   return (
-    <aside className="drag flex w-[232px] shrink-0 flex-col border-r border-line bg-sidebar">
-      <div className={cn('shrink-0', isMac() ? 'h-12' : 'h-3')} />
-      <div className="flex items-center gap-2.5 px-4 pb-4">
-        <div className="flex size-8 items-center justify-center rounded-[10px] bg-gradient-to-br from-[#6f6cf0] to-[#3c8ce7] text-white shadow-card">
-          <Inbox className="size-[17px]" strokeWidth={2.2} />
-        </div>
-        <div className="leading-tight">
-          <p className="text-[14px] font-semibold tracking-tight">Omni Desk</p>
-          <p className="text-[11px] text-fg-subtle">{demoActive ? 'デモモード' : 'ワークスペース'}</p>
-        </div>
-      </div>
+    <Stack
+      component="aside"
+      className="drag"
+      sx={(theme) => ({
+        width: 232,
+        flexShrink: 0,
+        borderRight: `1px solid ${theme.palette.divider}`,
+        bgcolor: theme.palette.mode === 'dark' ? '#13161b' : '#eceef2'
+      })}
+    >
+      {isMac() && <Box sx={{ flexShrink: 0, height: 32 }} />}
+      <Stack direction="row" spacing={1} sx={{ alignItems: 'center', px: 2, py: 2 }}>
+        <Box
+          sx={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            width: 32,
+            height: 32,
+            borderRadius: 1,
+            background: 'linear-gradient(135deg, #6f6cf0, #3c8ce7)',
+            color: '#fff'
+          }}
+        >
+          <Inbox size={16} strokeWidth={2.2} />
+        </Box>
+        <Box>
+          <Typography variant="body1" sx={{ fontSize: '16px', fontWeight: 600, lineHeight: 1.2 }}>
+            Omni Desk
+          </Typography>
+          <Typography variant="caption" color="text.disabled">
+            {demoActive ? 'デモモード' : 'ワークスペース'}
+          </Typography>
+        </Box>
+      </Stack>
 
-      <nav className="thin-scroll flex-1 space-y-0.5 overflow-y-auto px-2.5">
+      <Stack component="nav" spacing={0} sx={{ flex: 1, overflowY: 'auto' }}>
         {renderEntries(section('primary'))}
         {(['services'] as const).map((s) => {
           const list = section(s)
           if (!list.length) return null
           return (
-            <div key={s} className="space-y-0.5">
-              <p className="px-2.5 pt-5 pb-1.5 text-[11px] font-semibold tracking-wide text-fg-subtle">{SECTION_TITLE[s]}</p>
-              {renderEntries(list)}
-            </div>
+            <Stack key={s} spacing={0}>
+              <Typography variant="caption" color="text.disabled" sx={{ px: 2, pt: 2, pb: 1, fontWeight: 600 }}>
+                {SECTION_TITLE[s]}
+              </Typography>
+              {renderEntries(list, true)}
+            </Stack>
           )
         })}
-      </nav>
+      </Stack>
 
-      <div className="shrink-0 space-y-0.5 border-t border-line px-2.5 py-2.5">
-        <SyncStatus />
+      <Stack
+        spacing={0}
+        sx={(theme) => ({
+          flexShrink: 0,
+          borderTop: `1px solid ${theme.palette.divider}`
+        })}
+      >
+        <Box sx={{ px: 1 }}>
+          <ThemeSwitchRow mode={mode} />
+          <SyncStatus />
+        </Box>
         {renderEntries(section('footer'))}
-      </div>
-    </aside>
+      </Stack>
+    </Stack>
   )
 }

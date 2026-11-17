@@ -12,7 +12,25 @@ import {
   type SourceFilter
 } from '@omni-desk/client'
 import { formatDayHeading, previewText, startOfDay } from '@omni-desk/message-kit'
-import { Button, cn, EmptyState, ErrorNotice, IconButton, PageHeader, Segmented, SkeletonList } from '@omni-desk/ui'
+import {
+  Alert,
+  Box,
+  Button,
+  Card,
+  Chip,
+  EmptyState,
+  ErrorNotice,
+  IconButton,
+  InputAdornment,
+  MenuItem,
+  PageHeader,
+  Paper,
+  Segmented,
+  SkeletonList,
+  Stack,
+  TextField,
+  Typography
+} from '@omni-desk/ui'
 import { filterInbox, isFiltering, type InboxFilter } from './filter'
 import { InboxRow } from './InboxRow'
 import { Toast } from './Toast'
@@ -36,24 +54,38 @@ const SHORTCUTS: [string, string][] = [
 
 function ShortcutHelp({ onClose }: { onClose: () => void }) {
   return (
-    <div className="absolute top-full right-0 z-50 mt-2 w-72 rounded-xl border border-line bg-panel p-3 shadow-pop">
-      <div className="mb-2 flex items-center justify-between">
-        <p className="text-[12.5px] font-semibold">キーボード操作</p>
-        <IconButton label="閉じる" onClick={onClose} className="size-6">
-          <X className="size-3.5" />
+    <Paper
+      variant="outlined"
+      sx={{
+        position: 'absolute',
+        top: '100%',
+        right: 0,
+        zIndex: 50,
+        mt: 1,
+        width: 288,
+        p: 2,
+        boxShadow: 3
+      }}
+    >
+      <Stack direction="row" sx={{ mb: 1, alignItems: 'center', justifyContent: 'space-between' }}>
+        <Typography variant="body2" sx={{ fontWeight: 600 }}>
+          キーボード操作
+        </Typography>
+        <IconButton label="閉じる" onClick={onClose}>
+          <X size={16} />
         </IconButton>
-      </div>
-      <dl className="space-y-1">
+      </Stack>
+      <Stack spacing={1}>
         {SHORTCUTS.map(([key, label]) => (
-          <div key={key} className="flex items-center justify-between text-[12px]">
-            <dt className="text-fg-muted">{label}</dt>
-            <dd>
-              <kbd className="rounded border border-line bg-sunken px-1.5 py-px text-[11px] text-fg-muted">{key}</kbd>
-            </dd>
-          </div>
+          <Stack key={key} direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between' }}>
+            <Typography variant="caption" color="text.secondary">
+              {label}
+            </Typography>
+            <Chip size="small" variant="outlined" label={key} />
+          </Stack>
         ))}
-      </dl>
-    </div>
+      </Stack>
+    </Paper>
   )
 }
 
@@ -75,7 +107,6 @@ export function InboxView({ navigate }: FeatureContext) {
   const toText = useCallback((m: Message) => previewText(m, emoji), [emoji])
   const list = useMemo(
     () => filterInbox(inbox.entries, filter, now, toText),
-    // filter はプリミティブの組なので個別に依存させる
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [inbox.entries, filter.status, filter.source, filter.period, filter.query, now, toText]
   )
@@ -83,7 +114,6 @@ export function InboxView({ navigate }: FeatureContext) {
   const selectedId = ui.inboxSelected
   const selectedIndex = visible.findIndex((e) => e.message.id === selectedId)
 
-  // 選択中の項目が一覧から消えたら（対応済みにした等）、同じ位置の項目を選ぶ
   const lastIndex = useRef(0)
   useEffect(() => {
     if (selectedIndex >= 0) {
@@ -94,7 +124,6 @@ export function InboxView({ navigate }: FeatureContext) {
     if (fallback !== selectedId) actions.setUi({ inboxSelected: fallback })
   }, [selectedIndex, selectedId, visible])
 
-  // タブや絞り込みを変えたら表示件数を戻す
   useEffect(() => setLimit(PAGE), [filter.status, filter.source, filter.period, filter.query])
 
   const selected = selectedIndex >= 0 ? visible[selectedIndex] : undefined
@@ -135,7 +164,6 @@ export function InboxView({ navigate }: FeatureContext) {
   })
 
   const groups = useMemo(() => {
-    // 未対応・対応済みは日付ごとに見出しを付ける（あとでは解除が近い順なので付けない）
     if (filter.status === 'snoozed') return [{ key: 'all', label: null as string | null, items: visible }]
     const out: { key: string; label: string | null; items: typeof visible }[] = []
     for (const e of visible) {
@@ -151,47 +179,58 @@ export function InboxView({ navigate }: FeatureContext) {
   const errors = inbox.sources.filter((s) => s.error && (filter.source === 'all' || filter.source === s.source))
 
   return (
-    <div className="flex h-full flex-col">
+    <Stack sx={{ position: 'relative', height: '100%' }}>
       <PageHeader
         title="受信箱"
         subtitle="あなた宛てのメッセージを、未対応・あとで・対応済みで仕分けます"
         actions={
-          <div className="relative">
+          <Box sx={{ position: 'relative' }}>
             <Button size="sm" variant="ghost" onClick={() => setHelpOpen((v) => !v)}>
-              <Keyboard className="size-3.5" />
+              <Keyboard size={16} />
               ショートカット
             </Button>
             {helpOpen && <ShortcutHelp onClose={() => setHelpOpen(false)} />}
-          </div>
+          </Box>
         }
       >
-        <div className="flex flex-wrap items-center gap-2.5">
+        <Stack direction="row" spacing={2} sx={{ flexWrap: 'wrap', alignItems: 'center', rowGap: 1 }}>
           <Segmented<InboxStatus>
             value={ui.inboxStatus}
             onChange={(inboxStatus) => actions.setUi({ inboxStatus })}
             options={[
-              { value: 'open', label: <><Inbox className="size-3.5" />未対応</>, count: inbox.counts.open },
-              { value: 'snoozed', label: <><AlarmClock className="size-3.5" />あとで</>, count: inbox.counts.snoozed },
-              { value: 'done', label: <><CircleCheck className="size-3.5" />対応済み</>, count: inbox.counts.done }
+              { value: 'open', label: <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}><Inbox size={16} /><span>未対応</span></Stack>, count: inbox.counts.open },
+              { value: 'snoozed', label: <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}><AlarmClock size={16} /><span>あとで</span></Stack>, count: inbox.counts.snoozed },
+              { value: 'done', label: <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}><CircleCheck size={16} /><span>対応済み</span></Stack>, count: inbox.counts.done }
             ]}
           />
-          <label className="flex h-8 min-w-[220px] flex-1 items-center gap-2 rounded-lg border border-line bg-panel px-2.5 text-fg-subtle focus-within:border-accent">
-            <Search className="size-3.5 shrink-0" />
-            <input
-              ref={searchRef}
-              value={ui.inboxQuery}
-              onChange={(e) => actions.setUi({ inboxQuery: e.target.value })}
-              placeholder="送信者・ルーム・本文で検索"
-              className="w-full bg-transparent text-[13px] text-fg outline-none placeholder:text-fg-subtle"
-            />
-            {ui.inboxQuery ? (
-              <button onClick={() => actions.setUi({ inboxQuery: '' })} className="text-fg-subtle hover:text-fg" title="検索をクリア">
-                <X className="size-3.5" />
-              </button>
-            ) : (
-              <kbd className="rounded border border-line bg-sunken px-1 text-[10px]">/</kbd>
-            )}
-          </label>
+          <TextField
+            inputRef={searchRef}
+            size="small"
+            value={ui.inboxQuery}
+            onChange={(e) => actions.setUi({ inboxQuery: e.target.value })}
+            placeholder="送信者・ルーム・本文で検索"
+            sx={{ minWidth: 224, flex: 1 }}
+            slotProps={{
+              input: {
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <Search size={16} />
+                  </InputAdornment>
+                ),
+                endAdornment: ui.inboxQuery ? (
+                  <InputAdornment position="end">
+                    <IconButton label="検索をクリア" onClick={() => actions.setUi({ inboxQuery: '' })}>
+                      <X size={16} />
+                    </IconButton>
+                  </InputAdornment>
+                ) : (
+                  <InputAdornment position="end">
+                    <Chip size="small" variant="outlined" label="/" />
+                  </InputAdornment>
+                )
+              }
+            }}
+          />
           <Segmented<SourceFilter>
             size="sm"
             value={ui.inboxFilter}
@@ -202,42 +241,42 @@ export function InboxView({ navigate }: FeatureContext) {
               { value: 'chatwork', label: 'Chatwork' }
             ]}
           />
-          <select
+          <TextField
+            select
+            size="small"
             value={ui.inboxPeriod}
             onChange={(e) => actions.setUi({ inboxPeriod: e.target.value as InboxPeriod })}
-            className="h-8 rounded-lg border border-line bg-panel px-2 text-[12.5px] outline-none focus:border-accent"
+            sx={{ minWidth: 120 }}
           >
-            <option value="all">全期間</option>
-            <option value="today">今日</option>
-            <option value="7d">7 日以内</option>
-            <option value="30d">30 日以内</option>
-          </select>
-        </div>
+            <MenuItem value="all">全期間</MenuItem>
+            <MenuItem value="today">今日</MenuItem>
+            <MenuItem value="7d">7 日以内</MenuItem>
+            <MenuItem value="30d">30 日以内</MenuItem>
+          </TextField>
+        </Stack>
       </PageHeader>
 
-      <div className="thin-scroll relative flex-1 overflow-y-auto">
-        <div className="mx-auto max-w-[920px] px-6 py-4">
+      <Box sx={{ position: 'relative', flex: 1, overflowY: 'auto' }}>
+        <Box sx={{ mx: 'auto', maxWidth: 920, px: 3, py: 2 }}>
           {errors.length > 0 && (
-            <div className="mb-3 space-y-2">
+            <Stack spacing={1} sx={{ mb: 2 }}>
               {errors.map((s) => (
                 <ErrorNotice key={s.source} error={s.error!} source={s.source} onRetry={s.refetch} onOpenSettings={() => navigate(routes.settings())} />
               ))}
-            </div>
+            </Stack>
           )}
           {slackAuth === 'user' && filter.source !== 'chatwork' && (
-            <p className="mb-3 flex items-center gap-1.5 text-[11.5px] text-fg-subtle">
-              <Info className="size-3.5" />
+            <Alert severity="info" icon={<Info size={16} />} sx={{ mb: 2 }}>
               Slack はユーザートークン方式のため、メンションのみ表示しています（DM と既読状態はブラウザセッション方式で取得できます）
-            </p>
+            </Alert>
           )}
 
-          {/* 一覧の上の情報行：件数と一括操作 */}
           {list.length > 0 && (
-            <div className="mb-2 flex items-center justify-between px-1 text-[12px] text-fg-subtle">
-              <span>
+            <Stack direction="row" sx={{ mb: 1, alignItems: 'center', justifyContent: 'space-between', px: 0.5 }}>
+              <Typography variant="caption" color="text.disabled">
                 {filtering ? `${list.length} 件が一致` : `${list.length} 件`}
                 {inbox.hiddenCount > 0 && ` · 非表示の送信者 ${inbox.hiddenCount} 件を除く`}
-              </span>
+              </Typography>
               {filter.status === 'open' && list.length > 1 && (
                 <Button
                   size="sm"
@@ -251,20 +290,20 @@ export function InboxView({ navigate }: FeatureContext) {
                     )
                   }
                 >
-                  <CheckCheck className="size-3.5" />
+                  <CheckCheck size={16} />
                   {filtering ? '一致した' : '表示中の'} {list.length} 件を対応済みに
                 </Button>
               )}
-            </div>
+            </Stack>
           )}
 
           {inbox.isLoading && inbox.entries.length === 0 ? (
-            <div className="card p-4">
+            <Card sx={{ p: 2 }}>
               <SkeletonList rows={6} />
-            </div>
+            </Card>
           ) : list.length === 0 ? (
             <EmptyState
-              icon={filter.status === 'done' ? <CircleCheck className="size-5" /> : filter.status === 'snoozed' ? <AlarmClock className="size-5" /> : <Inbox className="size-5" />}
+              icon={filter.status === 'done' ? <CircleCheck size={24} /> : filter.status === 'snoozed' ? <AlarmClock size={24} /> : <Inbox size={24} />}
               title={
                 filtering
                   ? '条件に一致するメッセージはありません'
@@ -282,13 +321,25 @@ export function InboxView({ navigate }: FeatureContext) {
               }
             />
           ) : (
-            <div className="card overflow-hidden">
+            <Card sx={{ overflow: 'hidden' }}>
               {groups.map((g) => (
-                <section key={g.key}>
+                <Box key={g.key}>
                   {g.label && (
-                    <h3 className="sticky top-0 z-10 border-b border-line bg-sunken/95 px-5 py-1 text-[11.5px] font-semibold text-fg-muted backdrop-blur">
-                      {filter.status === 'done' ? `${g.label}に対応` : g.label}
-                    </h3>
+                    <Box
+                      sx={(theme) => ({
+                        position: 'sticky',
+                        top: 0,
+                        zIndex: 10,
+                        borderBottom: `1px solid ${theme.palette.divider}`,
+                        bgcolor: theme.palette.mode === 'dark' ? '#12151a' : '#f6f7f9',
+                        px: 3,
+                        py: 0.5
+                      })}
+                    >
+                      <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>
+                        {filter.status === 'done' ? `${g.label}に対応` : g.label}
+                      </Typography>
+                    </Box>
                   )}
                   {g.items.map((e) => (
                     <InboxRow
@@ -300,24 +351,28 @@ export function InboxView({ navigate }: FeatureContext) {
                       onOpenConversation={openConversation}
                     />
                   ))}
-                </section>
+                </Box>
               ))}
               {list.length > visible.length && (
-                <button
-                  onClick={() => setLimit((n) => n + PAGE)}
-                  className="w-full py-3 text-[12.5px] font-medium text-accent-text hover:bg-hover"
-                >
-                  さらに表示（残り {list.length - visible.length} 件）
-                </button>
+                <Box sx={{ p: 1, textAlign: 'center' }}>
+                  <Button variant="ghost" onClick={() => setLimit((n) => n + PAGE)}>
+                    さらに表示（残り {list.length - visible.length} 件）
+                  </Button>
+                </Box>
               )}
-            </div>
+            </Card>
           )}
-          <p className={cn('py-4 text-center text-[11px] text-fg-subtle', list.length === 0 && 'hidden')}>
-            J / K で移動、E で対応済み、S であとで、R で返信。<button className="underline" onClick={() => setHelpOpen(true)}>すべての操作</button>
-          </p>
-        </div>
-      </div>
+          {list.length > 0 && (
+            <Typography variant="caption" color="text.disabled" sx={{ display: 'block', py: 2, textAlign: 'center' }}>
+              J / K で移動、E で対応済み、S であとで、R で返信。{' '}
+              <Button size="sm" variant="ghost" onClick={() => setHelpOpen(true)}>
+                すべての操作
+              </Button>
+            </Typography>
+          )}
+        </Box>
+      </Box>
       <Toast />
-    </div>
+    </Stack>
   )
 }

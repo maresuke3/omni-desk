@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
-import { CircleAlert, CircleCheck, X } from 'lucide-react'
+import { X } from 'lucide-react'
 import { actions, useAppStore } from '@omni-desk/client'
-import { cn, IconButton } from '@omni-desk/ui'
+import { Alert, Box, Button, IconButton, Stack } from '@omni-desk/ui'
 
 /** 画面下の通知。元に戻せる操作には「元に戻す（Z）」を出す。数秒で消える */
 export function Toast() {
@@ -14,32 +14,40 @@ export function Toast() {
   }, [toast])
 
   if (!toast) return null
+  const severity = toast.tone === 'danger' ? 'error' : toast.tone === 'warning' ? 'warning' : 'success'
+
   return (
-    <div className="pointer-events-none absolute inset-x-0 bottom-5 z-50 flex justify-center px-4">
-      <div
+    <Box
+      sx={{
+        pointerEvents: 'none',
+        position: 'absolute',
+        insetInline: 0,
+        bottom: 24,
+        zIndex: 50,
+        display: 'flex',
+        justifyContent: 'center',
+        px: 2
+      }}
+    >
+      <Alert
         role="status"
-        className={cn(
-          'animate-fade-in pointer-events-auto flex max-w-xl items-center gap-2.5 rounded-xl border px-3.5 py-2 text-[12.5px] shadow-pop',
-          toast.tone === 'info' && 'border-line bg-fg text-canvas',
-          toast.tone === 'warning' && 'border-warning/30 bg-warning-soft text-fg',
-          toast.tone === 'danger' && 'border-danger/30 bg-danger-soft text-fg'
-        )}
+        severity={severity}
+        sx={{ pointerEvents: 'auto', maxWidth: 576, boxShadow: 3 }}
+        action={
+          <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+            {toast.undoable && (
+              <Button size="sm" variant="ghost" onClick={() => void actions.undoInbox()}>
+                元に戻す（Z）
+              </Button>
+            )}
+            <IconButton label="閉じる" onClick={actions.dismissToast}>
+              <X size={16} />
+            </IconButton>
+          </Stack>
+        }
       >
-        {toast.tone === 'info' ? (
-          <CircleCheck className="size-4 shrink-0 opacity-80" />
-        ) : (
-          <CircleAlert className={cn('size-4 shrink-0', toast.tone === 'warning' ? 'text-warning' : 'text-danger')} />
-        )}
-        <span className="min-w-0 flex-1">{toast.message}</span>
-        {toast.undoable && (
-          <button onClick={() => void actions.undoInbox()} className="shrink-0 rounded-md px-2 py-0.5 font-semibold underline-offset-2 hover:underline">
-            元に戻す（Z）
-          </button>
-        )}
-        <IconButton label="閉じる" onClick={actions.dismissToast} className={cn('size-6', toast.tone === 'info' && 'text-canvas/70 hover:bg-white/10 hover:text-canvas')}>
-          <X className="size-3.5" />
-        </IconButton>
-      </div>
-    </div>
+        {toast.message}
+      </Alert>
+    </Box>
   )
 }

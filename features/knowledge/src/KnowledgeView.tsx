@@ -14,14 +14,29 @@ import { actions, openExternal, useKnowledge, useSettings } from '@omni-desk/cli
 import { routes, type GitHubRepo, type KnowledgeDoc } from '@omni-desk/contracts'
 import type { FeatureContext } from '@omni-desk/contracts/feature'
 import { formatMessageTime } from '@omni-desk/message-kit'
-import { Button, EmptyState, PageHeader, Segmented, SkeletonList, cn } from '@omni-desk/ui'
+import {
+  Alert,
+  Box,
+  Button,
+  Card,
+  Chip,
+  Divider,
+  EmptyState,
+  InputAdornment,
+  ListItemButton,
+  PageHeader,
+  Paper,
+  Segmented,
+  SkeletonList,
+  Stack,
+  TextField,
+  Typography
+} from '@omni-desk/ui'
 import { CreateKnowledgeModal } from './CreateKnowledgeModal'
 
 type KnowledgeTab = 'all' | 'confluence' | 'notion' | 'repos'
 
-type SelectedItem =
-  | { kind: 'doc'; doc: KnowledgeDoc }
-  | { kind: 'repo'; repo: GitHubRepo }
+type SelectedItem = { kind: 'doc'; doc: KnowledgeDoc } | { kind: 'repo'; repo: GitHubRepo }
 
 export function KnowledgeView({ navigate }: FeatureContext) {
   const settings = useSettings()
@@ -97,12 +112,12 @@ export function KnowledgeView({ navigate }: FeatureContext) {
   const totalCount = visibleDocs.length + visibleRepos.length
 
   return (
-    <div className="flex h-full flex-col">
+    <Stack sx={{ height: '100%' }}>
       <PageHeader
         title="ナレッジ"
         subtitle="Confluence・Notion の共有資料とリポジトリ知識を横断確認・蓄積します"
         actions={
-          <div className="flex items-center gap-2">
+          <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
             <Button
               size="sm"
               variant="primary"
@@ -111,21 +126,21 @@ export function KnowledgeView({ navigate }: FeatureContext) {
                 setCreateOpen(true)
               }}
             >
-              <FilePlus2 className="size-3.5" />
+              <FilePlus2 size={16} />
               ナレッジを作成
             </Button>
             <Button
               size="sm"
               onClick={() => actions.refreshKnowledge(query.trim() ? { docQuery: query.trim() } : undefined)}
-              disabled={knowledge.loading}
+              loading={knowledge.loading}
             >
-              <RefreshCw className={cn('size-3.5', knowledge.loading && 'animate-spin')} />
+              <RefreshCw size={16} />
               更新
             </Button>
-          </div>
+          </Stack>
         }
       >
-        <div className="flex flex-wrap items-center gap-2.5">
+        <Stack direction="row" spacing={2} sx={{ flexWrap: 'wrap', alignItems: 'center', rowGap: 1 }}>
           <Segmented<KnowledgeTab>
             value={tab}
             onChange={setTab}
@@ -136,172 +151,232 @@ export function KnowledgeView({ navigate }: FeatureContext) {
               { value: 'repos', label: 'リポジトリ', count: knowledge.repos.length }
             ]}
           />
-          <div className="flex h-8 min-w-[200px] flex-1 items-center gap-1.5 rounded-lg border border-line bg-sunken px-2.5 focus-within:border-accent focus-within:bg-panel">
-            <Search className="size-3.5 text-fg-subtle" />
-            <input
-              type="search"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="タイトル・スペース・リポジトリ・言語で検索..."
-              className="w-full bg-transparent text-[12.5px] outline-none placeholder:text-fg-subtle"
-            />
-          </div>
-        </div>
+          <TextField
+            size="small"
+            type="search"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="タイトル・スペース・リポジトリ・言語で検索..."
+            sx={{ minWidth: 200, flex: 1 }}
+            slotProps={{
+              input: {
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <Search size={16} />
+                  </InputAdornment>
+                )
+              }
+            }}
+          />
+        </Stack>
       </PageHeader>
 
       {knowledge.error && (
-        <div className="px-7 pt-4">
-          <div className="flex items-center justify-between gap-3 rounded-lg border border-danger/30 bg-danger-soft px-4 py-3 text-[12.5px] text-danger">
-            <span>{knowledge.error.message}</span>
-            <Button size="sm" onClick={() => navigate(routes.settings())}>
-              設定を開く
-            </Button>
-          </div>
-        </div>
+        <Box sx={{ px: 3, pt: 2 }}>
+          <Alert
+            severity="error"
+            action={
+              <Button size="sm" onClick={() => navigate(routes.settings())}>
+                設定を開く
+              </Button>
+            }
+          >
+            {knowledge.error.message}
+          </Alert>
+        </Box>
       )}
 
       {!hasAnyConnection && !settings.demoActive ? (
-        <div className="flex-1 p-7">
-          <div className="card flex items-center justify-between gap-4 p-5">
-            <div>
-              <p className="text-[13.5px] font-semibold">Confluence / Notion / GitHub を連携しましょう</p>
-              <p className="mt-0.5 text-[12px] text-fg-muted">
+        <Box sx={{ flex: 1, p: 3 }}>
+          <Card sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 2, p: 3 }}>
+            <Box>
+              <Typography variant="body1" sx={{ fontWeight: 600 }}>
+                Confluence / Notion / GitHub を連携しましょう
+              </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
                 設定画面から接続すると、社内ドキュメントや Organization リポジトリをここに集約できます。
-              </p>
-            </div>
+              </Typography>
+            </Box>
             <Button size="sm" variant="primary" onClick={() => navigate(routes.settings())}>
               設定へ
             </Button>
-          </div>
-        </div>
+          </Card>
+        </Box>
       ) : knowledge.loading && totalCount === 0 ? (
-        <div className="p-7">
-          <div className="card p-4">
+        <Box sx={{ p: 3 }}>
+          <Card sx={{ p: 2 }}>
             <SkeletonList rows={6} avatar={false} />
-          </div>
-        </div>
+          </Card>
+        </Box>
       ) : totalCount === 0 ? (
-        <div className="flex-1 p-7">
+        <Box sx={{ flex: 1, p: 3 }}>
           <EmptyState
-            icon={<BookOpen className="size-5" />}
+            icon={<BookOpen size={24} />}
             title="表示できるナレッジがありません"
             description={q ? '検索キーワードを変えてみてください' : '右上の「更新」または設定画面からサービスを連携してください'}
           />
-        </div>
+        </Box>
       ) : (
-        <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[400px_minmax(0,1fr)]">
-          {/* 左ペイン：ドキュメント & リポジトリ一覧 */}
-          <div className="thin-scroll divide-y divide-line overflow-y-auto border-r border-line">
+        <Box
+          sx={{
+            display: 'grid',
+            minHeight: 0,
+            flex: 1,
+            gridTemplateColumns: { xs: '1fr', lg: '400px minmax(0, 1fr)' }
+          }}
+        >
+          <Box sx={(theme) => ({ overflowY: 'auto', borderRight: `1px solid ${theme.palette.divider}` })}>
             {visibleDocs.length > 0 && (
-              <section>
-                <div className="sticky top-0 z-10 flex items-center justify-between border-b border-line bg-sunken/95 px-4 py-2 backdrop-blur">
-                  <span className="flex items-center gap-1.5 text-[11.5px] font-semibold text-fg-muted">
-                    <FileText className="size-3.5" />
-                    ドキュメント
-                  </span>
-                  <span className="text-[11px] text-fg-subtle tabular-nums">{visibleDocs.length}</span>
-                </div>
-                <ul className="divide-y divide-line">
+              <Box>
+                <Stack
+                  direction="row"
+                  sx={(theme) => ({
+                    position: 'sticky',
+                    top: 0,
+                    zIndex: 10,
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    borderBottom: `1px solid ${theme.palette.divider}`,
+                    bgcolor: theme.palette.mode === 'dark' ? '#12151a' : '#f6f7f9',
+                    px: 2,
+                    py: 1
+                  })}
+                >
+                  <Stack direction="row" spacing={1} sx={{ alignItems: 'center', color: 'text.secondary' }}>
+                    <FileText size={16} />
+                    <Typography variant="caption" sx={{ fontWeight: 600 }}>
+                      ドキュメント
+                    </Typography>
+                  </Stack>
+                  <Typography variant="caption" color="text.disabled">
+                    {visibleDocs.length}
+                  </Typography>
+                </Stack>
+                <Stack divider={<Divider />}>
                   {visibleDocs.map((doc) => {
                     const key = `doc:${doc.id}`
                     const active = selected?.kind === 'doc' && selected.doc.id === doc.id
                     return (
-                      <li key={doc.id}>
-                        <button
-                          type="button"
-                          onClick={() => setSelectedKey(key)}
-                          className={cn(
-                            'flex w-full flex-col gap-1 px-4 py-3 text-left transition-colors hover:bg-hover/50',
-                            active && 'bg-accent/10'
+                      <ListItemButton
+                        key={doc.id}
+                        selected={active}
+                        onClick={() => setSelectedKey(key)}
+                        sx={{ flexDirection: 'column', alignItems: 'stretch', gap: 0.5, px: 2, py: 2 }}
+                      >
+                        <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+                          <Chip size="small" label={doc.source.toUpperCase()} />
+                          {doc.spaceOrParent && (
+                            <Typography variant="caption" color="text.disabled" sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              {doc.spaceOrParent}
+                            </Typography>
                           )}
-                        >
-                          <div className="flex items-center gap-2">
-                            <span className="rounded bg-sunken px-1.5 py-px text-[10.5px] font-medium uppercase text-fg-muted">
-                              {doc.source}
-                            </span>
-                            {doc.spaceOrParent && (
-                              <span className="truncate text-[11px] text-fg-subtle">{doc.spaceOrParent}</span>
-                            )}
-                          </div>
-                          <p className="truncate text-[13px] font-medium text-fg">{doc.title}</p>
-                          <p className="text-[11px] text-fg-subtle">
-                            {doc.author ? `${doc.author.name} · ` : ''}
-                            {formatMessageTime(doc.updatedAt)}
-                          </p>
-                        </button>
-                      </li>
+                        </Stack>
+                        <Typography variant="body1" sx={{ fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {doc.title}
+                        </Typography>
+                        <Typography variant="caption" color="text.disabled">
+                          {doc.author ? `${doc.author.name} · ` : ''}
+                          {formatMessageTime(doc.updatedAt)}
+                        </Typography>
+                      </ListItemButton>
                     )
                   })}
-                </ul>
-              </section>
+                </Stack>
+              </Box>
             )}
 
             {visibleRepos.length > 0 && (
-              <section>
-                <div className="sticky top-0 z-10 flex items-center justify-between border-b border-line bg-sunken/95 px-4 py-2 backdrop-blur">
-                  <span className="flex items-center gap-1.5 text-[11.5px] font-semibold text-fg-muted">
-                    <FolderGit2 className="size-3.5" />
-                    リポジトリ
-                  </span>
-                  <span className="text-[11px] text-fg-subtle tabular-nums">{visibleRepos.length}</span>
-                </div>
-                <ul className="divide-y divide-line">
+              <Box>
+                <Stack
+                  direction="row"
+                  sx={(theme) => ({
+                    position: 'sticky',
+                    top: 0,
+                    zIndex: 10,
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    borderBottom: `1px solid ${theme.palette.divider}`,
+                    bgcolor: theme.palette.mode === 'dark' ? '#12151a' : '#f6f7f9',
+                    px: 2,
+                    py: 1
+                  })}
+                >
+                  <Stack direction="row" spacing={1} sx={{ alignItems: 'center', color: 'text.secondary' }}>
+                    <FolderGit2 size={16} />
+                    <Typography variant="caption" sx={{ fontWeight: 600 }}>
+                      リポジトリ
+                    </Typography>
+                  </Stack>
+                  <Typography variant="caption" color="text.disabled">
+                    {visibleRepos.length}
+                  </Typography>
+                </Stack>
+                <Stack divider={<Divider />}>
                   {visibleRepos.map((repo) => {
                     const key = `repo:${repo.id}`
                     const active = selected?.kind === 'repo' && selected.repo.id === repo.id
                     return (
-                      <li key={repo.id}>
-                        <button
-                          type="button"
-                          onClick={() => setSelectedKey(key)}
-                          className={cn(
-                            'flex w-full flex-col gap-1 px-4 py-3 text-left transition-colors hover:bg-hover/50',
-                            active && 'bg-accent/10'
-                          )}
-                        >
-                          <div className="flex flex-wrap items-center gap-1.5">
-                            <span className="truncate font-mono text-[12.5px] font-medium text-fg">{repo.fullName}</span>
-                            <span className="rounded bg-sunken px-1.5 py-px text-[10px] text-fg-subtle">
-                              {repo.isPrivate ? 'Private' : 'Public'}
-                            </span>
-                            {repo.language && (
-                              <span className="rounded bg-sunken px-1.5 py-px text-[10px] text-fg-muted">
-                                {repo.language}
-                              </span>
-                            )}
-                          </div>
-                          {repo.description && <p className="line-clamp-1 text-[11.5px] text-fg-muted">{repo.description}</p>}
-                          <p className="text-[11px] text-fg-subtle">更新: {formatMessageTime(repo.updatedAt)}</p>
-                        </button>
-                      </li>
+                      <ListItemButton
+                        key={repo.id}
+                        selected={active}
+                        onClick={() => setSelectedKey(key)}
+                        sx={{ flexDirection: 'column', alignItems: 'stretch', gap: 0.5, px: 2, py: 2 }}
+                      >
+                        <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', alignItems: 'center' }}>
+                          <Typography variant="body2" sx={{ fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {repo.fullName}
+                          </Typography>
+                          <Chip size="small" label={repo.isPrivate ? 'Private' : 'Public'} />
+                          {repo.language && <Chip size="small" variant="outlined" label={repo.language} />}
+                        </Stack>
+                        {repo.description && (
+                          <Typography variant="caption" color="text.secondary" sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {repo.description}
+                          </Typography>
+                        )}
+                        <Typography variant="caption" color="text.disabled">
+                          更新: {formatMessageTime(repo.updatedAt)}
+                        </Typography>
+                      </ListItemButton>
                     )
                   })}
-                </ul>
-              </section>
+                </Stack>
+              </Box>
             )}
-          </div>
+          </Box>
 
-          {/* 右ペイン：詳細プレビュー＆関連コンテキスト */}
-          <div className="thin-scroll overflow-y-auto p-6">
+          <Box sx={{ overflowY: 'auto', p: 3 }}>
             {selected?.kind === 'doc' ? (
-              <div className="mx-auto max-w-2xl space-y-4">
-                <div className="flex flex-wrap items-start justify-between gap-3 border-b border-line pb-4">
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      <span className="rounded bg-sunken px-2 py-0.5 text-[11px] font-semibold uppercase text-fg-muted">
-                        {selected.doc.source}
-                      </span>
+              <Stack spacing={2} sx={{ mx: 'auto', maxWidth: 680 }}>
+                <Stack
+                  direction="row"
+                  spacing={2}
+                  sx={(theme) => ({
+                    flexWrap: 'wrap',
+                    alignItems: 'flex-start',
+                    justifyContent: 'space-between',
+                    borderBottom: `1px solid ${theme.palette.divider}`,
+                    pb: 2
+                  })}
+                >
+                  <Box sx={{ minWidth: 0, flex: 1 }}>
+                    <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+                      <Chip size="small" label={selected.doc.source.toUpperCase()} />
                       {selected.doc.spaceOrParent && (
-                        <span className="text-[12px] text-fg-subtle">{selected.doc.spaceOrParent}</span>
+                        <Typography variant="caption" color="text.disabled">
+                          {selected.doc.spaceOrParent}
+                        </Typography>
                       )}
-                    </div>
-                    <h2 className="mt-2 text-[17px] font-semibold text-fg">{selected.doc.title}</h2>
-                    <p className="mt-1 text-[12px] text-fg-subtle">
+                    </Stack>
+                    <Typography variant="h2" sx={{ mt: 1 }}>
+                      {selected.doc.title}
+                    </Typography>
+                    <Typography variant="caption" color="text.disabled" sx={{ display: 'block', mt: 0.5 }}>
                       {selected.doc.author ? `作成・編集: ${selected.doc.author.name} · ` : ''}
                       最終更新: {formatMessageTime(selected.doc.updatedAt)}
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-2">
+                    </Typography>
+                  </Box>
+                  <Stack direction="row" spacing={1}>
                     <Button
                       size="sm"
                       onClick={() => {
@@ -312,45 +387,57 @@ export function KnowledgeView({ navigate }: FeatureContext) {
                         setCreateOpen(true)
                       }}
                     >
-                      <FilePlus2 className="size-3.5" />
+                      <FilePlus2 size={16} />
                       派生メモを作成
                     </Button>
                     {selected.doc.url && (
                       <Button size="sm" variant="primary" onClick={() => openExternal(selected.doc.url)}>
-                        <ExternalLink className="size-3.5" />
+                        <ExternalLink size={16} />
                         ブラウザで開く
                       </Button>
                     )}
-                  </div>
-                </div>
-                <div className="rounded-xl border border-line bg-panel p-5">
-                  <p className="text-[11.5px] font-medium text-fg-subtle">概要 / 抜粋</p>
-                  <p className="mt-2 whitespace-pre-wrap text-[13.5px] leading-relaxed text-fg">
+                  </Stack>
+                </Stack>
+                <Paper variant="outlined" sx={{ p: 3 }}>
+                  <Typography variant="caption" color="text.disabled">
+                    概要 / 抜粋
+                  </Typography>
+                  <Typography variant="body1" sx={{ mt: 1, whiteSpace: 'pre-wrap' }}>
                     {selected.doc.excerpt || '（抜粋テキストはありません。右上の「ブラウザで開く」から本文を確認できます）'}
-                  </p>
-                </div>
-              </div>
+                  </Typography>
+                </Paper>
+              </Stack>
             ) : selected?.kind === 'repo' ? (
-              <div className="mx-auto max-w-2xl space-y-5">
-                <div className="flex flex-wrap items-start justify-between gap-3 border-b border-line pb-4">
-                  <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="rounded bg-sunken px-2 py-0.5 text-[11px] font-medium text-fg-muted">
-                        {selected.repo.isPrivate ? 'Private' : 'Public'}
-                      </span>
-                      {selected.repo.language && (
-                        <span className="rounded bg-sunken px-2 py-0.5 text-[11px] text-fg-muted">
-                          {selected.repo.language}
-                        </span>
-                      )}
+              <Stack spacing={3} sx={{ mx: 'auto', maxWidth: 680 }}>
+                <Stack
+                  direction="row"
+                  spacing={2}
+                  sx={(theme) => ({
+                    flexWrap: 'wrap',
+                    alignItems: 'flex-start',
+                    justifyContent: 'space-between',
+                    borderBottom: `1px solid ${theme.palette.divider}`,
+                    pb: 2
+                  })}
+                >
+                  <Box sx={{ minWidth: 0, flex: 1 }}>
+                    <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', alignItems: 'center' }}>
+                      <Chip size="small" label={selected.repo.isPrivate ? 'Private' : 'Public'} />
+                      {selected.repo.language && <Chip size="small" variant="outlined" label={selected.repo.language} />}
                       {selected.repo.owner && (
-                        <span className="text-[12px] text-fg-subtle">Owner: {selected.repo.owner}</span>
+                        <Typography variant="caption" color="text.disabled">
+                          Owner: {selected.repo.owner}
+                        </Typography>
                       )}
-                    </div>
-                    <h2 className="mt-2 font-mono text-[17px] font-semibold text-fg">{selected.repo.fullName}</h2>
-                    <p className="mt-1 text-[12px] text-fg-subtle">最終更新: {formatMessageTime(selected.repo.updatedAt)}</p>
-                  </div>
-                  <div className="flex items-center gap-2">
+                    </Stack>
+                    <Typography variant="h2" sx={{ mt: 1 }}>
+                      {selected.repo.fullName}
+                    </Typography>
+                    <Typography variant="caption" color="text.disabled" sx={{ display: 'block', mt: 0.5 }}>
+                      最終更新: {formatMessageTime(selected.repo.updatedAt)}
+                    </Typography>
+                  </Box>
+                  <Stack direction="row" spacing={1}>
                     <Button
                       size="sm"
                       onClick={() => {
@@ -361,87 +448,91 @@ export function KnowledgeView({ navigate }: FeatureContext) {
                         setCreateOpen(true)
                       }}
                     >
-                      <FilePlus2 className="size-3.5" />
+                      <FilePlus2 size={16} />
                       リポジトリメモを作成
                     </Button>
                     <Button size="sm" variant="primary" onClick={() => openExternal(selected.repo.url)}>
-                      <ExternalLink className="size-3.5" />
+                      <ExternalLink size={16} />
                       GitHub で開く
                     </Button>
-                  </div>
-                </div>
+                  </Stack>
+                </Stack>
 
                 {selected.repo.description && (
-                  <div className="rounded-xl border border-line bg-panel p-4 text-[13px] text-fg">
-                    {selected.repo.description}
-                  </div>
+                  <Paper variant="outlined" sx={{ p: 2 }}>
+                    <Typography variant="body1">{selected.repo.description}</Typography>
+                  </Paper>
                 )}
 
-                <div className="space-y-3">
-                  <h3 className="flex items-center gap-2 text-[12.5px] font-semibold text-fg">
-                    <GitPullRequest className="size-4 text-accent-text" />
-                    関連するオープン PR（{relatedPrs.length}）
-                  </h3>
+                <Stack spacing={1.5}>
+                  <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+                    <GitPullRequest size={16} />
+                    <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                      関連するオープン PR（{relatedPrs.length}）
+                    </Typography>
+                  </Stack>
                   {relatedPrs.length === 0 ? (
-                    <p className="text-[12px] text-fg-subtle">このリポジトリに関連するオープン PR はありません</p>
+                    <Typography variant="caption" color="text.disabled">
+                      このリポジトリに関連するオープン PR はありません
+                    </Typography>
                   ) : (
-                    <div className="card divide-y divide-line overflow-hidden">
-                      {relatedPrs.map((pr) => (
-                        <button
-                          key={pr.id}
-                          type="button"
-                          onClick={() => openExternal(pr.url)}
-                          className="flex w-full items-center justify-between gap-3 px-4 py-2.5 text-left hover:bg-hover/50"
-                        >
-                          <div className="min-w-0 flex-1">
-                            <p className="truncate text-[13px] font-medium text-fg">
-                              #{pr.number} {pr.title}
-                            </p>
-                            <p className="text-[11px] text-fg-subtle">
-                              {pr.role === 'reviewer' ? 'レビュー依頼' : '自分の PR'} · {pr.author.name}
-                            </p>
-                          </div>
-                          <ExternalLink className="size-3.5 shrink-0 text-fg-subtle" />
-                        </button>
-                      ))}
-                    </div>
+                    <Card sx={{ overflow: 'hidden' }}>
+                      <Stack divider={<Divider />}>
+                        {relatedPrs.map((pr) => (
+                          <ListItemButton key={pr.id} onClick={() => openExternal(pr.url)} sx={{ justifyContent: 'space-between', gap: 2, px: 2, py: 1.5 }}>
+                            <Box sx={{ minWidth: 0, flex: 1 }}>
+                              <Typography variant="body1" sx={{ fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                #{pr.number} {pr.title}
+                              </Typography>
+                              <Typography variant="caption" color="text.disabled">
+                                {pr.role === 'reviewer' ? 'レビュー依頼' : '自分の PR'} · {pr.author.name}
+                              </Typography>
+                            </Box>
+                            <ExternalLink size={16} />
+                          </ListItemButton>
+                        ))}
+                      </Stack>
+                    </Card>
                   )}
-                </div>
+                </Stack>
 
-                <div className="space-y-3">
-                  <h3 className="flex items-center gap-2 text-[12.5px] font-semibold text-fg">
-                    <CircleDot className="size-4 text-success" />
-                    関連するアサイン済み Issue（{relatedIssues.length}）
-                  </h3>
+                <Stack spacing={1.5}>
+                  <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+                    <CircleDot size={16} />
+                    <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                      関連するアサイン済み Issue（{relatedIssues.length}）
+                    </Typography>
+                  </Stack>
                   {relatedIssues.length === 0 ? (
-                    <p className="text-[12px] text-fg-subtle">このリポジトリにアサインされたオープン Issue はありません</p>
+                    <Typography variant="caption" color="text.disabled">
+                      このリポジトリにアサインされたオープン Issue はありません
+                    </Typography>
                   ) : (
-                    <div className="card divide-y divide-line overflow-hidden">
-                      {relatedIssues.map((issue) => (
-                        <button
-                          key={issue.id}
-                          type="button"
-                          onClick={() => openExternal(issue.url)}
-                          className="flex w-full items-center justify-between gap-3 px-4 py-2.5 text-left hover:bg-hover/50"
-                        >
-                          <div className="min-w-0 flex-1">
-                            <p className="truncate text-[13px] font-medium text-fg">
-                              #{issue.number} {issue.title}
-                            </p>
-                            <p className="text-[11px] text-fg-subtle">{formatMessageTime(issue.updatedAt)}</p>
-                          </div>
-                          <ExternalLink className="size-3.5 shrink-0 text-fg-subtle" />
-                        </button>
-                      ))}
-                    </div>
+                    <Card sx={{ overflow: 'hidden' }}>
+                      <Stack divider={<Divider />}>
+                        {relatedIssues.map((issue) => (
+                          <ListItemButton key={issue.id} onClick={() => openExternal(issue.url)} sx={{ justifyContent: 'space-between', gap: 2, px: 2, py: 1.5 }}>
+                            <Box sx={{ minWidth: 0, flex: 1 }}>
+                              <Typography variant="body1" sx={{ fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                #{issue.number} {issue.title}
+                              </Typography>
+                              <Typography variant="caption" color="text.disabled">
+                                {formatMessageTime(issue.updatedAt)}
+                              </Typography>
+                            </Box>
+                            <ExternalLink size={16} />
+                          </ListItemButton>
+                        ))}
+                      </Stack>
+                    </Card>
                   )}
-                </div>
-              </div>
+                </Stack>
+              </Stack>
             ) : (
-              <EmptyState icon={<BookOpen className="size-6" />} title="項目を選択してください" />
+              <EmptyState icon={<BookOpen size={24} />} title="項目を選択してください" />
             )}
-          </div>
-        </div>
+          </Box>
+        </Box>
       )}
 
       {createOpen && (
@@ -451,6 +542,6 @@ export function KnowledgeView({ navigate }: FeatureContext) {
           onClose={() => setCreateOpen(false)}
         />
       )}
-    </div>
+    </Stack>
   )
 }

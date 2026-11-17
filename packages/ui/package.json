@@ -5,13 +5,15 @@
   "description": "デザインシステム（トークン CSS・基本コンポーネント）。データ層に依存しない",
   "type": "module",
   "exports": {
-    ".": "./src/index.ts",
-    "./theme.css": "./src/theme.css"
+    ".": "./src/index.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@emotion/react": "^11.14.0",
+    "@emotion/styled": "^11.14.1",
+    "@mui/material": "^9.5.0",
     "@omni-desk/contracts": "workspace:*",
     "lucide-react": "catalog:"
   },

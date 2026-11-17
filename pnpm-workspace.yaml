@@ -12,7 +12,6 @@ allowBuilds:
 # 依存バージョンはここで一元管理し、各 package.json では "catalog:" で参照する
 # （pnpm の minimumReleaseAge により、公開直後のバージョンはインストールされない）
 catalog:
-  '@tailwindcss/vite': ^4.3.5
   '@types/node': ^24.10.0
   '@types/react': ^19.3.0
   '@types/react-dom': ^19.2.0
@@ -24,7 +23,6 @@ catalog:
   lucide-react: ^1.72.0
   react: ^19.3.1
   react-dom: ^19.3.1
-  tailwindcss: ^4.3.5
   typescript: ^7.0.2
   vite: ^8.3.8
   vitest: ^5.1.0
